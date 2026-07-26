@@ -178,10 +178,9 @@ html[data-theme='light'] .scene-vignette {
   pointer-events: auto;
 }
 
-/* Let pointer reach the canvas for 3D interaction in the right half */
+/* Let pointer reach the canvas for 3D interaction behind overlay */
 .hero-scene-space {
-  pointer-events: none;
-  min-height: 1px;
+  display: none;
 }
 
 .shell {
@@ -406,22 +405,14 @@ html[data-theme='light'] .theme-toggle {
 }
 
 .hero-stage {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: end;
-  gap: clamp(0.75rem, 2vw, 1.75rem);
+  display: block;
   margin-top: clamp(0.75rem, 2.5vh, 2rem);
   min-width: 0;
-  min-height: 0;
   width: 100%;
 }
 
-@media (min-width: 900px) {
-  .hero-stage {
-    grid-template-columns: minmax(0, min(40rem, 56%)) minmax(0, 1fr);
-    align-items: center;
-  }
+.hero-scene-space {
+  display: none;
 }
 
 .hero-copy {
@@ -449,7 +440,7 @@ html[data-theme='light'] .hero-copy {
 .hero-copy h1 {
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(2.05rem, 6.8vw, 3.55rem);
+  font-size: clamp(2.05rem, 5.5vw, 3.55rem);
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1.14;
@@ -475,7 +466,7 @@ html[data-theme='light'] .hero-copy {
 
 .hero-copy p:not(.hero-kicker) {
   margin: 0;
-  max-width: min(40ch, 100%);
+  max-width: 100%;
   font-size: clamp(0.94rem, 2vw, 1.08rem);
   line-height: 1.55;
   color: var(--ink-dim);
@@ -493,7 +484,7 @@ html[data-theme='light'] .hero-copy {
 }
 
 .cta-row .btn {
-  flex: 1 1 11rem;
+  flex: 1 1 12rem;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -1543,19 +1534,10 @@ table.rates tr.featured td {
   }
 
   .hero-stage {
-    grid-template-columns: 1fr;
-    align-items: start;
     margin-top: 0.65rem;
-    flex: 0;
-  }
-
-  .hero-scene-space {
-    display: none;
   }
 
   .hero-copy {
-    max-width: 100%;
-    width: 100%;
     padding: 1.1rem 1rem;
     gap: 0.85rem;
   }
@@ -1571,7 +1553,6 @@ table.rates tr.featured td {
   }
 
   .hero-copy p:not(.hero-kicker) {
-    max-width: 100%;
     font-size: 0.95rem;
     line-height: 1.55;
   }
@@ -1609,11 +1590,6 @@ table.rates tr.featured td {
 }
 
 @media (max-width: 1024px) and (min-width: 721px) {
-  .hero-stage {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    align-items: center;
-  }
-
   .scene-vignette {
     background:
       linear-gradient(90deg, rgba(4, 20, 15, 0.9) 0%, rgba(4, 20, 15, 0.5) 42%, rgba(4, 20, 15, 0.12) 70%, rgba(4, 20, 15, 0.25) 100%),

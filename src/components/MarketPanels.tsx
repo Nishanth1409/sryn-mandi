@@ -73,7 +73,6 @@ export function HeroOverlay({
             </button>
           </div>
         </div>
-        <div className="hero-scene-space" aria-hidden="true" />
       </div>
     </header>
   )
