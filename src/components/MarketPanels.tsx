@@ -396,54 +396,64 @@ export function RatesPanel({
 
       <div className="rates-scroll">
         <p className="rates-scroll__hint">{t('scrollMore')}</p>
-        <div className="table-wrap table-wrap--rates" tabIndex={0} role="region" aria-label={t('liveMandiBoard')}>
-          {filtered.length === 0 ? (
-            <div className="empty">{t('noMatches')}</div>
-          ) : (
-            <table className="rates rates--scroll">
-              <thead>
-                <tr>
-                  <th className="sticky-col">{t('market')}</th>
-                  <th>{t('variety')}</th>
-                  <th>{t('min')}</th>
-                  <th>{t('modal')}</th>
-                  <th>{t('max')}</th>
-                  <th>{t('trend')}</th>
-                  <th>{t('date')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => (
-                  <tr key={r.id} className={r.is_shivamogga ? 'featured' : undefined}>
-                    <td className="sticky-col">
-                      <div className="market">
-                        <strong>
-                          {r.market}
-                          {r.is_shivamogga ? <span className="tag">{t('shivamogga')}</span> : null}
-                        </strong>
-                        <small>
-                          {r.district}, {r.state}
-                        </small>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="market">
-                        <strong>{r.variety}</strong>
-                        <small>{r.grade || '—'}</small>
-                      </div>
-                    </td>
-                    <td className="num">{formatINR(r.min_price)}</td>
-                    <td className="num">{formatINR(r.modal_price)}</td>
-                    <td className="num">{formatINR(r.max_price)}</td>
-                    <td>
-                      <TrendDelta change={r.change} changePct={r.change_pct} />
-                    </td>
-                    <td>{r.arrival_date}</td>
+        <div className="rates-scroll__frame">
+          <div
+            className="table-wrap table-wrap--rates"
+            tabIndex={0}
+            role="region"
+            aria-label={t('liveMandiBoard')}
+          >
+            {filtered.length === 0 ? (
+              <div className="empty">{t('noMatches')}</div>
+            ) : (
+              <table className="rates rates--scroll">
+                <thead>
+                  <tr>
+                    <th className="sticky-col">{t('market')}</th>
+                    <th>{t('variety')}</th>
+                    <th>{t('min')}</th>
+                    <th>{t('modal')}</th>
+                    <th>{t('max')}</th>
+                    <th>{t('trend')}</th>
+                    <th>{t('date')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {filtered.map((r) => (
+                    <tr key={r.id} className={r.is_shivamogga ? 'featured' : undefined}>
+                      <td className="sticky-col">
+                        <div className="market">
+                          <strong>
+                            {r.market}
+                            {r.is_shivamogga ? (
+                              <span className="tag">{t('shivamogga')}</span>
+                            ) : null}
+                          </strong>
+                          <small>
+                            {r.district}, {r.state}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="market">
+                          <strong>{r.variety}</strong>
+                          <small>{r.grade || '—'}</small>
+                        </div>
+                      </td>
+                      <td className="num">{formatINR(r.min_price)}</td>
+                      <td className="num">{formatINR(r.modal_price)}</td>
+                      <td className="num">{formatINR(r.max_price)}</td>
+                      <td>
+                        <TrendDelta change={r.change} changePct={r.change_pct} />
+                      </td>
+                      <td>{r.arrival_date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="rates-scroll__fade" aria-hidden="true" />
         </div>
       </div>
     </section>
