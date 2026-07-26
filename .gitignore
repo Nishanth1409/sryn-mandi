@@ -38,3 +38,6 @@ venv/
 # Local agent quote store (runtime)
 backend/data/*.json
 !backend/data/.gitkeep
+
+.vercel
+.env*
