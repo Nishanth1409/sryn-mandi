@@ -408,92 +408,99 @@ html[data-theme='light'] .theme-toggle {
 .hero-stage {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, min(100%, 26.5rem)) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
-  gap: clamp(0.65rem, 2vw, 1.5rem);
-  margin-top: clamp(0.55rem, 2vh, 1.5rem);
+  gap: clamp(0.75rem, 2vw, 1.75rem);
+  margin-top: clamp(0.75rem, 2.5vh, 2rem);
   min-width: 0;
   min-height: 0;
   width: 100%;
 }
 
-.hero-copy h1 {
-  margin: 0;
-  font-family: var(--display);
-  font-size: clamp(1.75rem, 5vw, 3.4rem);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1.08;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  max-width: 100%;
+@media (min-width: 900px) {
+  .hero-stage {
+    grid-template-columns: minmax(0, min(40rem, 56%)) minmax(0, 1fr);
+    align-items: center;
+  }
 }
 
 .hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 1.8vw, 1.1rem);
   width: 100%;
-  max-width: min(26.5rem, 100%);
+  max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: clamp(0.85rem, 2vw, 1.25rem);
-  border-radius: 22px;
+  padding: clamp(1.05rem, 2.6vw, 1.6rem) clamp(1.05rem, 2.4vw, 1.55rem);
+  border-radius: clamp(16px, 2vw, 22px);
   border: 1px solid var(--line);
-  background: linear-gradient(160deg, rgba(4, 20, 15, 0.72), rgba(4, 20, 15, 0.42));
+  background: linear-gradient(160deg, rgba(4, 20, 15, 0.8), rgba(4, 20, 15, 0.5));
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
   backdrop-filter: blur(14px) saturate(1.1);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 html[data-theme='light'] .hero-copy {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.62));
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.74));
   box-shadow: 0 16px 40px rgba(18, 36, 27, 0.12);
 }
 
+.hero-copy h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(2.05rem, 6.8vw, 3.55rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.14;
+  color: var(--ink);
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
 .hero-kicker {
-  margin: 0 0 0.55rem;
-  font-size: clamp(0.66rem, 1.4vw, 0.76rem);
+  margin: 0;
+  font-size: clamp(0.72rem, 1.6vw, 0.82rem);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
   color: var(--nut-soft);
-  line-height: 1.35;
+  line-height: 1.45;
   max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   white-space: normal;
-  hyphens: auto;
 }
 
 .hero-copy p:not(.hero-kicker) {
-  margin: 0.5rem 0 0.8rem;
-  max-width: 100%;
-  font-size: clamp(0.86rem, 1.6vw, 1rem);
-  line-height: 1.5;
+  margin: 0;
+  max-width: min(40ch, 100%);
+  font-size: clamp(0.94rem, 2vw, 1.08rem);
+  line-height: 1.55;
   color: var(--ink-dim);
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .cta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
+  gap: 0.65rem;
   width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 
 .cta-row .btn {
-  flex: 1 1 auto;
-  min-width: min(100%, 9.5rem);
+  flex: 1 1 11rem;
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
   line-height: 1.25;
-  padding: 0.6rem 0.95rem;
+  padding: 0.72rem 1.15rem;
 }
 
 .btn {
@@ -1538,7 +1545,7 @@ table.rates tr.featured td {
   .hero-stage {
     grid-template-columns: 1fr;
     align-items: start;
-    margin-top: 0.45rem;
+    margin-top: 0.65rem;
     flex: 0;
   }
 
@@ -1549,34 +1556,36 @@ table.rates tr.featured td {
   .hero-copy {
     max-width: 100%;
     width: 100%;
-    padding: 0.85rem 0.9rem;
+    padding: 1.1rem 1rem;
+    gap: 0.85rem;
   }
 
   .hero-copy h1 {
-    font-size: clamp(1.7rem, 7.5vw, 2.35rem);
-    line-height: 1.1;
+    font-size: clamp(2rem, 8.5vw, 2.55rem);
+    line-height: 1.15;
   }
 
   .hero-kicker {
-    margin-bottom: 0.4rem;
-    letter-spacing: 0.03em;
-    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    font-size: 0.72rem;
   }
 
   .hero-copy p:not(.hero-kicker) {
-    margin: 0.45rem 0 0.7rem;
-    font-size: 0.9rem;
+    max-width: 100%;
+    font-size: 0.95rem;
+    line-height: 1.55;
   }
 
   .cta-row {
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.55rem;
   }
 
   .cta-row .btn {
     width: 100%;
     min-width: 0;
-    flex: 1 1 auto;
+    flex: none;
+    white-space: normal;
   }
 
   .panel-stack {
@@ -1599,10 +1608,10 @@ table.rates tr.featured td {
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1024px) and (min-width: 721px) {
   .hero-stage {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    align-items: end;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: center;
   }
 
   .scene-vignette {
