@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-STORE_PATH = Path(__file__).resolve().parent / "data" / "agent_quotes.json"
+STORE_PATH = Path(
+    os.environ.get("AGENT_QUOTES_PATH")
+    or (
+        Path("/tmp/agent_quotes.json")
+        if os.environ.get("VERCEL")
+        else Path(__file__).resolve().parent / "data" / "agent_quotes.json"
+    )
+)
 _lock = threading.Lock()
 
 VALID_VARIETIES = {"sarakku", "bede", "rashi", "andal"}
