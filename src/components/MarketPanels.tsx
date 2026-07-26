@@ -11,6 +11,7 @@ import { PrefsControls } from './PrefsControls'
 import { usePrefs } from '../i18n/PrefsContext'
 import type { HistoryPoint, PriceRecord, SummaryStats, TopMarket } from '../types'
 import { formatCompact, formatINR, TrendDelta } from './shared'
+import { useMemo } from 'react'
 
 export type FiltersState = {
   query: string
@@ -261,32 +262,72 @@ export function RatesPanel({
   updatedAt: string
 }) {
   const { t, locale } = usePrefs()
-  const states = Array.from(new Set(records.map((r) => r.state))).sort()
-  const districts = Array.from(
-    new Set(
-      records
-        .filter((r) => !filters.state || r.state === filters.state)
-        .map((r) => r.district)
-        .filter(Boolean),
-    ),
-  ).sort()
-  const varieties = Array.from(new Set(records.map((r) => r.variety))).sort()
 
-  const filtered = records.filter((r) => {
-    if (filters.focus === 'shivamogga' && !r.is_shivamogga) return false
-    if (filters.focus === 'karnataka' && r.state !== 'Karnataka') return false
-    if (filters.state && r.state !== filters.state) return false
-    if (filters.district && r.district !== filters.district) return false
-    if (filters.variety && r.variety !== filters.variety) return false
-    if (filters.query) {
-      const q = filters.query.toLowerCase()
-      const hay = `${r.market} ${r.district} ${r.state} ${r.variety}`.toLowerCase()
-      if (!hay.includes(q)) return false
+  const scoped = useMemo(() => {
+    return records.filter((r) => {
+      if (filters.focus === 'shivamogga' && !r.is_shivamogga) return false
+      if (filters.focus === 'karnataka' && r.state !== 'Karnataka') return false
+      return true
+    })
+  }, [records, filters.focus])
+
+  const states = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of scoped) {
+      if (!r.state) continue
+      counts.set(r.state, (counts.get(r.state) || 0) + 1)
     }
-    return true
-  })
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }))
+  }, [scoped])
+
+  const districts = useMemo(() => {
+    const pool = scoped.filter((r) => !filters.state || r.state === filters.state)
+    const counts = new Map<string, number>()
+    for (const r of pool) {
+      if (!r.district) continue
+      counts.set(r.district, (counts.get(r.district) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }))
+  }, [scoped, filters.state])
+
+  const varieties = useMemo(
+    () => Array.from(new Set(scoped.map((r) => r.variety).filter(Boolean))).sort(),
+    [scoped],
+  )
+
+  const filtered = useMemo(() => {
+    return scoped
+      .filter((r) => {
+        if (filters.state && r.state !== filters.state) return false
+        if (filters.district && r.district !== filters.district) return false
+        if (filters.variety && r.variety !== filters.variety) return false
+        if (filters.query) {
+          const q = filters.query.toLowerCase()
+          const hay = `${r.market} ${r.district} ${r.state} ${r.variety}`.toLowerCase()
+          if (!hay.includes(q)) return false
+        }
+        return true
+      })
+      .sort((a, b) => b.modal_price - a.modal_price)
+  }, [scoped, filters])
 
   const dateLocale = locale === 'kn' ? 'kn-IN' : locale === 'hi' ? 'hi-IN' : 'en-IN'
+
+  const setFocus = (focus: FiltersState['focus']) => {
+    if (focus === 'shivamogga') {
+      onChange({ ...filters, focus, state: 'Karnataka', district: 'Shivamogga', query: '' })
+      return
+    }
+    if (focus === 'karnataka') {
+      onChange({ ...filters, focus, state: 'Karnataka', district: '', query: '' })
+      return
+    }
+    onChange({ ...filters, focus, state: '', district: '', query: '' })
+  }
 
   return (
     <section className="shell glass" id="rates">
@@ -301,31 +342,100 @@ export function RatesPanel({
       </div>
 
       <div className="status">
-        <span>{t('rows', { filtered: filtered.length, total: records.length })}</span>
+        <span>{t('compactLots', { n: filtered.length })}</span>
+        <span>
+          {filters.district || filters.state || t('focusArecaBelt')}
+        </span>
         <span>{new Date(updatedAt).toLocaleString(dateLocale)}</span>
-        <span>AGMARKNET · data.gov.in</span>
       </div>
 
       <div className="chips">
         {(
           [
+            ['all', 'focusArecaBelt'],
             ['karnataka', 'focusKarnataka'],
             ['shivamogga', 'focusShivamogga'],
-            ['all', 'focusAllIndia'],
           ] as const
         ).map(([key, labelKey]) => (
           <button
             key={key}
             type="button"
             className={`chip ${filters.focus === key ? 'on' : ''}`}
-            onClick={() => onChange({ ...filters, focus: key })}
+            onClick={() => setFocus(key)}
           >
             {t(labelKey)}
           </button>
         ))}
       </div>
 
-      <div className="filters">
+      <div className="picker-block">
+        <label className="picker-label">{t('pickState')}</label>
+        <div className="chip-scroll" role="listbox" aria-label={t('pickState')}>
+          <button
+            type="button"
+            className={`chip ${!filters.state ? 'on' : ''}`}
+            onClick={() => onChange({ ...filters, state: '', district: '' })}
+          >
+            {t('all')}
+          </button>
+          {states.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              className={`chip ${filters.state === s.name ? 'on' : ''}`}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  state: s.name,
+                  district: '',
+                  focus: s.name === 'Karnataka' ? 'karnataka' : 'all',
+                })
+              }
+            >
+              {s.name}
+              <em>{s.count}</em>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="picker-block">
+        <label className="picker-label">{t('pickDistrict')}</label>
+        <div className="chip-scroll chip-scroll--district" role="listbox" aria-label={t('pickDistrict')}>
+          <button
+            type="button"
+            className={`chip ${!filters.district ? 'on' : ''}`}
+            onClick={() => onChange({ ...filters, district: '' })}
+          >
+            {t('allDistricts')}
+          </button>
+          {districts.map((d) => (
+            <button
+              key={d.name}
+              type="button"
+              className={`chip ${filters.district === d.name ? 'on' : ''}`}
+              onClick={() =>
+                onChange({
+                  ...filters,
+                  district: d.name,
+                  focus:
+                    d.name.toLowerCase().includes('shivamogga') ||
+                    d.name.toLowerCase().includes('shimoga')
+                      ? 'shivamogga'
+                      : filters.focus === 'shivamogga'
+                        ? 'karnataka'
+                        : filters.focus,
+                })
+              }
+            >
+              {d.name}
+              <em>{d.count}</em>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="filters filters--compact">
         <div className="field">
           <label htmlFor="q">{t('search')}</label>
           <input
@@ -334,36 +444,6 @@ export function RatesPanel({
             value={filters.query}
             onChange={(e) => onChange({ ...filters, query: e.target.value })}
           />
-        </div>
-        <div className="field">
-          <label htmlFor="state">{t('state')}</label>
-          <select
-            id="state"
-            value={filters.state}
-            onChange={(e) => onChange({ ...filters, state: e.target.value, district: '' })}
-          >
-            <option value="">{t('all')}</option>
-            {states.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="district">{t('district')}</label>
-          <select
-            id="district"
-            value={filters.district}
-            onChange={(e) => onChange({ ...filters, district: e.target.value })}
-          >
-            <option value="">{t('all')}</option>
-            {districts.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="field">
           <label htmlFor="variety">{t('variety')}</label>
@@ -386,7 +466,7 @@ export function RatesPanel({
             className="btn btn-ghost"
             type="button"
             onClick={() =>
-              onChange({ query: '', state: '', district: '', variety: '', focus: 'karnataka' })
+              onChange({ query: '', state: '', district: '', variety: '', focus: 'all' })
             }
           >
             {t('clear')}
@@ -394,67 +474,36 @@ export function RatesPanel({
         </div>
       </div>
 
-      <div className="rates-scroll">
-        <p className="rates-scroll__hint">{t('scrollMore')}</p>
-        <div className="rates-scroll__frame">
-          <div
-            className="table-wrap table-wrap--rates"
-            tabIndex={0}
-            role="region"
-            aria-label={t('liveMandiBoard')}
-          >
-            {filtered.length === 0 ? (
-              <div className="empty">{t('noMatches')}</div>
-            ) : (
-              <table className="rates rates--scroll">
-                <thead>
-                  <tr>
-                    <th className="sticky-col">{t('market')}</th>
-                    <th>{t('variety')}</th>
-                    <th>{t('min')}</th>
-                    <th>{t('modal')}</th>
-                    <th>{t('max')}</th>
-                    <th>{t('trend')}</th>
-                    <th>{t('date')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id} className={r.is_shivamogga ? 'featured' : undefined}>
-                      <td className="sticky-col">
-                        <div className="market">
-                          <strong>
-                            {r.market}
-                            {r.is_shivamogga ? (
-                              <span className="tag">{t('shivamogga')}</span>
-                            ) : null}
-                          </strong>
-                          <small>
-                            {r.district}, {r.state}
-                          </small>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="market">
-                          <strong>{r.variety}</strong>
-                          <small>{r.grade || '—'}</small>
-                        </div>
-                      </td>
-                      <td className="num">{formatINR(r.min_price)}</td>
-                      <td className="num">{formatINR(r.modal_price)}</td>
-                      <td className="num">{formatINR(r.max_price)}</td>
-                      <td>
-                        <TrendDelta change={r.change} changePct={r.change_pct} />
-                      </td>
-                      <td>{r.arrival_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          <div className="rates-scroll__fade" aria-hidden="true" />
-        </div>
+      <div className="mandi-compact">
+        {filtered.length === 0 ? (
+          <div className="empty">{t('noMatches')}</div>
+        ) : (
+          filtered.map((r) => (
+            <article key={r.id} className={`mandi-row ${r.is_shivamogga ? 'featured' : ''}`}>
+              <div className="mandi-row__main">
+                <div className="market">
+                  <strong>{r.market}</strong>
+                  <small>
+                    {r.district}, {r.state}
+                  </small>
+                </div>
+                <div className="mandi-row__modal">
+                  <label>{t('modal')}</label>
+                  <strong className="num">{formatINR(r.modal_price)}</strong>
+                </div>
+              </div>
+              <div className="mandi-row__meta">
+                <span className="mandi-pill">{r.variety}</span>
+                {r.grade ? <span className="mandi-pill soft">{r.grade}</span> : null}
+                <span className="mandi-range">
+                  {formatINR(r.min_price)} – {formatINR(r.max_price)}
+                </span>
+                <TrendDelta change={r.change} changePct={r.change_pct} />
+                <span className="mandi-date">{r.arrival_date}</span>
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </section>
   )

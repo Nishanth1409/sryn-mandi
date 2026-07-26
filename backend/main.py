@@ -26,10 +26,19 @@ DEFAULT_STATES = ["Karnataka"]
 ALL_INDIA_STATES = [
     "Karnataka",
     "Kerala",
-    "Meghalaya",
     "Assam",
+    "Meghalaya",
+    "Tamil Nadu",
+    "West Bengal",
     "Goa",
     "Maharashtra",
+    "Andhra Pradesh",
+    "Telangana",
+    "Tripura",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Andaman and Nicobar",
     "Uttar Pradesh",
 ]
 

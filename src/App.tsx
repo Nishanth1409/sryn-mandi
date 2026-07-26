@@ -22,7 +22,7 @@ const emptyFilters: FiltersState = {
   state: '',
   district: '',
   variety: '',
-  focus: 'karnataka',
+  focus: 'all',
 }
 
 export default function App() {
@@ -32,7 +32,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [filters, setFilters] = useState<FiltersState>(emptyFilters)
-  const [scope, setScope] = useState<'karnataka' | 'india'>('karnataka')
+  const [scope, setScope] = useState<'karnataka' | 'india'>('india')
   const scopeRef = useRef(scope)
   const hasDataRef = useRef(false)
   scopeRef.current = scope
@@ -61,7 +61,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    void load(false, 'karnataka')
+    void load(false, 'india')
     const id = window.setInterval(() => void load(true), REFRESH_MS)
     return () => window.clearInterval(id)
   }, [load])
@@ -79,8 +79,7 @@ export default function App() {
 
   const handleFocusChange = (next: FiltersState) => {
     setFilters(next)
-    if (next.focus === 'all' && scope !== 'india') void load(false, 'india')
-    else if (next.focus !== 'all' && scope !== 'karnataka') void load(false, 'karnataka')
+    if (scope !== 'india') void load(false, 'india')
   }
 
   return (

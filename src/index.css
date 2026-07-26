@@ -679,10 +679,142 @@ html[data-theme='light'] .hero-copy {
   font-weight: 600;
 }
 
-.chip.on {
-  background: var(--leaf);
-  border-color: var(--leaf);
-  color: var(--chip-on-ink);
+.chip em {
+  margin-left: 0.35rem;
+  font-style: normal;
+  opacity: 0.75;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.picker-block {
+  padding: 0 var(--space-panel-x) 0.65rem;
+  min-width: 0;
+}
+
+.picker-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+.chip-scroll {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.chip-scroll .chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.filters--compact {
+  grid-template-columns: 1.4fr 1fr auto;
+}
+
+.mandi-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0 var(--space-panel-x) var(--space-panel-y);
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mandi-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--table-surface);
+  padding: 0.7rem 0.8rem;
+  color: var(--ink);
+}
+
+.mandi-row.featured {
+  background: var(--table-featured);
+}
+
+.mandi-row__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mandi-row__modal {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.mandi-row__modal label {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.mandi-row__modal strong {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--nut-soft);
+}
+
+.mandi-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  margin-top: 0.55rem;
+}
+
+.mandi-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(196, 132, 29, 0.16);
+  color: var(--nut-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mandi-pill.soft {
+  background: var(--surface-soft);
+  color: var(--ink-dim);
+}
+
+.mandi-range,
+.mandi-date {
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .filters--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .mandi-compact {
+    max-height: min(58vh, 480px);
+  }
+
+  .mandi-row__modal strong {
+    font-size: 1rem;
+  }
 }
 
 .filters {
