@@ -101,45 +101,80 @@ function VarietyTable({
           </p>
         </div>
       </header>
-      <div className="table-wrap variety-table">
-        {rows.length === 0 ? (
-          <div className="empty">{t('waitingApmc')}</div>
-        ) : (
-          <table className="rates">
-            <thead>
-              <tr>
-                <th>{t('market')}</th>
-                <th>{t('grade')}</th>
-                <th>{t('min')}</th>
-                <th>{t('modal')}</th>
-                <th>{t('max')}</th>
-                <th>{t('trend')}</th>
-                <th>{t('date')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <div className="market">
-                      <strong>{r.market}</strong>
-                      <small>{r.district}</small>
-                    </div>
-                  </td>
-                  <td>{r.grade || '—'}</td>
-                  <td className="num">{formatINR(r.min_price)}</td>
-                  <td className="num">{formatINR(r.modal_price)}</td>
-                  <td className="num">{formatINR(r.max_price)}</td>
-                  <td>
-                    <TrendDelta change={r.change} changePct={r.change_pct} />
-                  </td>
-                  <td>{r.arrival_date}</td>
+
+      {rows.length === 0 ? (
+        <div className="empty">{t('waitingApmc')}</div>
+      ) : (
+        <>
+          <div className="variety-lots">
+            {rows.map((r) => (
+              <article className="lot-card" key={r.id}>
+                <div className="lot-card__top">
+                  <div className="market">
+                    <strong>{r.market}</strong>
+                    <small>
+                      {r.district}
+                      {r.grade ? ` · ${r.grade}` : ''}
+                    </small>
+                  </div>
+                  <TrendDelta change={r.change} changePct={r.change_pct} />
+                </div>
+                <div className="lot-card__prices">
+                  <div>
+                    <label>{t('min')}</label>
+                    <strong className="num">{formatINR(r.min_price)}</strong>
+                  </div>
+                  <div>
+                    <label>{t('modal')}</label>
+                    <strong className="num lot-modal">{formatINR(r.modal_price)}</strong>
+                  </div>
+                  <div>
+                    <label>{t('max')}</label>
+                    <strong className="num">{formatINR(r.max_price)}</strong>
+                  </div>
+                </div>
+                <div className="lot-card__date">{r.arrival_date}</div>
+              </article>
+            ))}
+          </div>
+
+          <div className="table-wrap variety-table variety-table--desktop">
+            <table className="rates">
+              <thead>
+                <tr>
+                  <th>{t('market')}</th>
+                  <th>{t('grade')}</th>
+                  <th>{t('min')}</th>
+                  <th>{t('modal')}</th>
+                  <th>{t('max')}</th>
+                  <th>{t('trend')}</th>
+                  <th>{t('date')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <div className="market">
+                        <strong>{r.market}</strong>
+                        <small>{r.district}</small>
+                      </div>
+                    </td>
+                    <td>{r.grade || '—'}</td>
+                    <td className="num">{formatINR(r.min_price)}</td>
+                    <td className="num">{formatINR(r.modal_price)}</td>
+                    <td className="num">{formatINR(r.max_price)}</td>
+                    <td>
+                      <TrendDelta change={r.change} changePct={r.change_pct} />
+                    </td>
+                    <td>{r.arrival_date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </article>
   )
 }
