@@ -679,6 +679,12 @@ html[data-theme='light'] .hero-copy {
   font-weight: 600;
 }
 
+.chip.on {
+  background: var(--leaf);
+  border-color: var(--leaf);
+  color: var(--chip-on-ink);
+}
+
 .chip em {
   margin-left: 0.35rem;
   font-style: normal;
