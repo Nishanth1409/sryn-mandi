@@ -411,10 +411,6 @@ html[data-theme='light'] .theme-toggle {
   width: 100%;
 }
 
-.hero-scene-space {
-  display: none;
-}
-
 .hero-copy {
   display: flex;
   flex-direction: column;
