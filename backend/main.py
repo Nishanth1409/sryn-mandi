@@ -37,9 +37,7 @@ ALL_INDIA_STATES = [
     "Goa",
     "Maharashtra",
     "Andhra Pradesh",
-    "Telangana",
     "Tripura",
-    "Odisha",
 ]
 
 SHIVAMOGGA_MARKETS = {
@@ -450,12 +448,19 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
             not force
             and mem["data"] is not None
             and mem.get("key") == cache_key
+            and getattr(mem["data"], "summary", None)
+            and mem["data"].summary.records > 0
             and now - float(mem["fetched_at"]) < CACHE_TTL_SECONDS
         ):
             return _cached_response(mem["data"], float(mem["fetched_at"]), now)
 
     disk_data, disk_at = _read_disk_cache(cache_key)
-    if disk_data is not None and not force and now - disk_at < CACHE_TTL_SECONDS:
+    if (
+        disk_data is not None
+        and disk_data.summary.records > 0
+        and not force
+        and now - disk_at < CACHE_TTL_SECONDS
+    ):
         with _cache_lock:
             _cache["data"] = disk_data
             _cache["fetched_at"] = disk_at
@@ -466,16 +471,26 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
         response = await _fetch_prices_fresh(days, states)
     except Exception:
         # Prefer last good board over a hard failure (cold start / upstream outage)
-        if disk_data is not None and now - disk_at < STALE_TTL_SECONDS:
+        if disk_data is not None and disk_data.summary.records > 0 and now - disk_at < STALE_TTL_SECONDS:
             return _cached_response(disk_data, disk_at, now)
         with _cache_lock:
             if (
                 _cache["data"] is not None
                 and _cache.get("key") == cache_key
+                and _cache["data"].summary.records > 0
                 and now - float(_cache["fetched_at"]) < STALE_TTL_SECONDS
             ):
                 return _cached_response(_cache["data"], float(_cache["fetched_at"]), now)
         raise
+
+    # Never persist or prefer an empty board over a previous good one
+    if response.summary.records <= 0:
+        if disk_data is not None and disk_data.summary.records > 0 and now - disk_at < STALE_TTL_SECONDS:
+            return _cached_response(disk_data, disk_at, now)
+        if len(states) > 1:
+            # All-India failed upstream — fall back to Karnataka so UI stays usable
+            return await _load_prices(days=days, states=DEFAULT_STATES, force=False)
+        return response
 
     with _cache_lock:
         _cache["data"] = response
@@ -495,7 +510,12 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
     loop = asyncio.get_running_loop()
     datagov_task = asyncio.create_task(_fetch_datagovin())
 
-    per_state_timeout = 12.0 if len(states) > 2 else 20.0
+    # Vercel/serverless: large parallel fan-out to AGMARKNET often returns empty.
+    # Fetch in small batches with an overall deadline so we keep real rates.
+    batch_size = 2 if len(states) > 2 else 1
+    per_state_timeout = 18.0
+    overall_deadline = time.time() + (50.0 if len(states) > 2 else 25.0)
+    raw: list[dict] = []
 
     async def one_state(state: str) -> list[dict]:
         try:
@@ -506,13 +526,20 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
         except Exception:
             return []
 
-    results = await asyncio.gather(*(one_state(state) for state in states))
-    raw: list[dict] = []
-    for batch in results:
-        raw.extend(batch)
+    for i in range(0, len(states), batch_size):
+        if time.time() >= overall_deadline:
+            break
+        batch = states[i : i + batch_size]
+        results = await asyncio.gather(*(one_state(state) for state in batch))
+        for part in results:
+            raw.extend(part)
+
+    # Guarantee Karnataka data if multi-state path produced nothing
+    if not raw and "Karnataka" in states:
+        raw.extend(await one_state("Karnataka"))
 
     try:
-        datagov = await asyncio.wait_for(datagov_task, timeout=6.0)
+        datagov = await asyncio.wait_for(datagov_task, timeout=8.0)
         raw.extend(datagov)
     except Exception:
         datagov_task.cancel()

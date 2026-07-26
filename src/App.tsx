@@ -49,9 +49,14 @@ export default function App() {
         scope: activeScope,
         refresh,
       })
-      setData(payload)
-      hasDataRef.current = true
-      if (nextScope) setScope(nextScope)
+      // Keep existing boards if upstream returns an empty/zero payload
+      if (payload.records?.length) {
+        setData(payload)
+        hasDataRef.current = true
+        if (nextScope) setScope(nextScope)
+      } else if (!hasDataRef.current) {
+        setData(payload)
+      }
     } catch (err) {
       setError((err as Error).message || 'Unable to load market prices')
     } finally {
@@ -67,20 +72,25 @@ export default function App() {
       try {
         setLoading(true)
         setError(null)
-        // Stage 1: Karnataka first so boards appear quickly
+        // Stage 1: Karnataka first so boards appear quickly with real rates
         const quick = await fetchPrices({ days: 14, scope: 'karnataka' })
         if (cancelled) return
-        setData(quick)
-        hasDataRef.current = true
-        setScope('karnataka')
+        if (quick.records?.length) {
+          setData(quick)
+          hasDataRef.current = true
+          setScope('karnataka')
+        }
         setLoading(false)
 
-        // Stage 2: expand to All-India in the background
+        // Stage 2: expand to All-India — never replace good data with an empty board
         setRefreshing(true)
         const full = await fetchPrices({ days: 14, scope: 'india' })
         if (cancelled) return
-        setData(full)
-        setScope('india')
+        if (full.records?.length) {
+          setData(full)
+          setScope('india')
+          hasDataRef.current = true
+        }
       } catch (err) {
         if (cancelled) return
         setError((err as Error).message || 'Unable to load market prices')
