@@ -13,7 +13,7 @@ const en = {
   syncingAgmarknet: 'syncing AGMARKNET',
   justNow: 'just now',
   minutesAgo: '{n}m ago',
-  heroKicker: 'AGMARKNET · GPS place rates',
+  heroKicker: 'Official AGMARKNET · GPS place rates',
   heroTitle1: 'The mandi,',
   heroTitle2: 'in motion.',
   heroBody:
