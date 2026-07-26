@@ -114,6 +114,7 @@ const en = {
   installIosHint: 'On iPhone/iPad: Safari → Share → Add to Home Screen.',
   installNow: 'Install',
   installLater: 'Not now',
+  scrollMore: 'Swipe sideways for more details →',
 } as const
 
 const kn: Record<MessageKey, string> = {
@@ -221,6 +222,7 @@ const kn: Record<MessageKey, string> = {
   installIosHint: 'iPhone/iPad: Safari → Share → Add to Home Screen.',
   installNow: 'ಸ್ಥಾಪಿಸಿ',
   installLater: 'ಈಗ ಬೇಡ',
+  scrollMore: 'ಹೆಚ್ಚು ವಿವರಗಳಿಗೆ ಅಡ್ಡಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ →',
 }
 
 const hi: Record<MessageKey, string> = {
@@ -328,6 +330,7 @@ const hi: Record<MessageKey, string> = {
   installIosHint: 'iPhone/iPad: Safari → Share → Add to Home Screen.',
   installNow: 'इंस्टॉल',
   installLater: 'अभी नहीं',
+  scrollMore: 'और विवरण देखने के लिए बगल में स्लाइड करें →',
 }
 
 export const messages: Record<Locale, Record<MessageKey, string>> = {

@@ -658,17 +658,119 @@ html[data-theme='light'] .hero-copy {
   max-width: 100%;
 }
 
+.rates-scroll {
+  position: relative;
+  margin: 0 0 0.35rem;
+  min-width: 0;
+}
+
+.rates-scroll__hint {
+  display: none;
+  margin: 0 var(--space-panel-x) 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--nut-soft);
+  letter-spacing: 0.02em;
+}
+
+.table-wrap--rates {
+  position: relative;
+  margin: 0 var(--space-panel-x) var(--space-panel-y);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nut) transparent;
+}
+
+.table-wrap--rates::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-wrap--rates::-webkit-scrollbar-track {
+  background: var(--surface-soft);
+  border-radius: 999px;
+}
+
+.table-wrap--rates::-webkit-scrollbar-thumb {
+  background: var(--nut);
+  border-radius: 999px;
+}
+
+.table-wrap--rates::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 8px;
+  width: 2.25rem;
+  background: linear-gradient(90deg, transparent, var(--panel));
+  border-radius: 0 14px 14px 0;
+}
+
+.rates--scroll {
+  margin: 0;
+  min-width: 760px;
+}
+
+.rates--scroll .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--panel);
+  box-shadow: 6px 0 10px -8px rgba(0, 0, 0, 0.45);
+  min-width: 9.5rem;
+  max-width: 11.5rem;
+}
+
+.rates--scroll thead .sticky-col {
+  z-index: 3;
+}
+
+.rates--scroll tr.featured .sticky-col {
+  background: color-mix(in srgb, var(--panel) 82%, #c4841d 18%);
+}
+
+html[data-theme='light'] .rates--scroll tr.featured .sticky-col {
+  background: color-mix(in srgb, #ffffff 88%, #c4841d 12%);
+}
+
+@media (max-width: 960px) {
+  .rates-scroll__hint {
+    display: block;
+  }
+
+  .rates--scroll {
+    min-width: 720px;
+  }
+
+  .rates--scroll .sticky-col {
+    min-width: 8.25rem;
+    max-width: 9.5rem;
+  }
+}
+
 .glass,
 .shell,
 #local,
 .variety-card,
-.agent-board {
+.agent-board,
+#rates {
   max-width: 100%;
   min-width: 0;
 }
 
 .variety-card {
   overflow: hidden;
+}
+
+#rates {
+  overflow: visible;
 }
 
 table.rates {
