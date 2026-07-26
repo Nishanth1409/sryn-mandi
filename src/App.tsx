@@ -61,9 +61,44 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    void load(false, 'india')
-    const id = window.setInterval(() => void load(true), REFRESH_MS)
-    return () => window.clearInterval(id)
+    let cancelled = false
+
+    const boot = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        // Stage 1: Karnataka first so boards appear quickly
+        const quick = await fetchPrices({ days: 14, scope: 'karnataka' })
+        if (cancelled) return
+        setData(quick)
+        hasDataRef.current = true
+        setScope('karnataka')
+        setLoading(false)
+
+        // Stage 2: expand to All-India in the background
+        setRefreshing(true)
+        const full = await fetchPrices({ days: 14, scope: 'india' })
+        if (cancelled) return
+        setData(full)
+        setScope('india')
+      } catch (err) {
+        if (cancelled) return
+        setError((err as Error).message || 'Unable to load market prices')
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          setRefreshing(false)
+        }
+      }
+    }
+
+    void boot()
+    // Soft refresh (use cache) — hard refresh only via Sync Markets button
+    const id = window.setInterval(() => void load(false), REFRESH_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
   }, [load])
 
   const updatedLabel = useMemo(() => {

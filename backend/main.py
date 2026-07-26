@@ -5,9 +5,13 @@ AdikeLive API — authentic arecanut prices from AGMARKNET + data.gov.in
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import re
+import threading
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -35,11 +39,7 @@ ALL_INDIA_STATES = [
     "Andhra Pradesh",
     "Telangana",
     "Tripura",
-    "Mizoram",
-    "Nagaland",
     "Odisha",
-    "Andaman and Nicobar",
-    "Uttar Pradesh",
 ]
 
 SHIVAMOGGA_MARKETS = {
@@ -54,8 +54,21 @@ SHIVAMOGGA_MARKETS = {
     "hosanagara",
 }
 
-CACHE_TTL_SECONDS = 180  # 3 minutes live cache
-_cache: dict[str, Any] = {"data": None, "fetched_at": 0.0, "meta": {}}
+CACHE_TTL_SECONDS = 600  # 10 minutes fresh
+STALE_TTL_SECONDS = 6 * 3600  # serve last good payload up to 6h on cold starts
+_cache: dict[str, Any] = {"data": None, "fetched_at": 0.0, "key": None}
+_cache_lock = threading.Lock()
+_agmarknet_local = threading.local()
+_fetch_sem = threading.Semaphore(6)
+
+PRICE_CACHE_PATH = Path(
+    os.environ.get("PRICE_CACHE_PATH")
+    or (
+        Path("/tmp/prices_cache.json")
+        if os.environ.get("VERCEL")
+        else Path(__file__).resolve().parent / "data" / "prices_cache.json"
+    )
+)
 
 app = FastAPI(
     title="Araka Net API",
@@ -153,31 +166,96 @@ def _slug(*parts: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", raw).strip("-")
 
 
+def _get_agmarknet():
+    """Per-thread SDK client so state fetches can run in parallel safely."""
+    from agmarknet import Agmarknet
+
+    client = getattr(_agmarknet_local, "client", None)
+    if client is None:
+        client = Agmarknet(
+            request_delay=0,
+            timeout=15.0,
+            max_workers=2,
+            use_cache=True,
+        )
+        _agmarknet_local.client = client
+    return client
+
+
+def _read_disk_cache(cache_key: str) -> tuple[PricesResponse | None, float]:
+    try:
+        if not PRICE_CACHE_PATH.exists():
+            return None, 0.0
+        payload = json.loads(PRICE_CACHE_PATH.read_text(encoding="utf-8"))
+        entry = (payload.get("entries") or {}).get(cache_key)
+        if not entry:
+            return None, 0.0
+        fetched_at = float(entry.get("fetched_at") or 0)
+        data = entry.get("data")
+        if not isinstance(data, dict):
+            return None, 0.0
+        return PricesResponse.model_validate(data), fetched_at
+    except Exception:
+        return None, 0.0
+
+
+def _write_disk_cache(cache_key: str, response: PricesResponse, fetched_at: float) -> None:
+    try:
+        PRICE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        entries: dict[str, Any] = {}
+        if PRICE_CACHE_PATH.exists():
+            try:
+                existing = json.loads(PRICE_CACHE_PATH.read_text(encoding="utf-8"))
+                if isinstance(existing.get("entries"), dict):
+                    entries = existing["entries"]
+            except Exception:
+                entries = {}
+        entries[cache_key] = {
+            "fetched_at": fetched_at,
+            "data": response.model_dump(),
+        }
+        # Keep only the latest few scopes to bound /tmp size
+        if len(entries) > 6:
+            ranked = sorted(entries.items(), key=lambda kv: float(kv[1].get("fetched_at") or 0))
+            entries = dict(ranked[-6:])
+        PRICE_CACHE_PATH.write_text(
+            json.dumps({"entries": entries}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _cached_response(response: PricesResponse, fetched_at: float, now: float) -> PricesResponse:
+    return response.model_copy(update={"cache_age_seconds": int(max(0, now - fetched_at))})
+
+
 def _fetch_agmarknet_state(state: str, from_date: str, to_date: str) -> list[dict]:
     """Fetch authentic AGMARKNET rows for one state via official SDK."""
-    from agmarknet import Agmarknet
     from agmarknet.exceptions import AgmarknetError
 
-    api = Agmarknet()
-    try:
-        df = api.report(
-            from_date=from_date,
-            to_date=to_date,
-            commodity=COMMODITY,
-            state=state,
-            data_type="both",
-            limit=1000,
-        )
-    except AgmarknetError:
-        return []
-    except Exception:
-        return []
+    with _fetch_sem:
+        api = _get_agmarknet()
+        try:
+            df = api.report(
+                from_date=from_date,
+                to_date=to_date,
+                commodity=COMMODITY,
+                state=state,
+                data_type="price",
+                limit=1000,
+            )
+        except AgmarknetError:
+            return []
+        except Exception:
+            return []
 
     if df is None or getattr(df, "empty", True):
         return []
 
     rows: list[dict] = []
-    for _, row in df.iterrows():
+    records = df.to_dict(orient="records")
+    for row in records:
         rows.append(
             {
                 "state": str(row.get("state_name") or state),
@@ -189,7 +267,7 @@ def _fetch_agmarknet_state(state: str, from_date: str, to_date: str) -> list[dic
                 "arrival_date": str(row.get("arrival_date") or ""),
                 "min_price": _parse_number(row.get("min_price")),
                 "max_price": _parse_number(row.get("max_price")),
-                "modal_price": _parse_number(row.get("model_price")),
+                "modal_price": _parse_number(row.get("model_price") or row.get("modal_price")),
                 "arrival_qty": _parse_number(row.get("arrival_qty")) or None,
                 "unit": str(row.get("unit_name_price") or "Rs./Quintal"),
                 "source": "AGMARKNET",
@@ -208,7 +286,7 @@ async def _fetch_datagovin() -> list[dict]:
         "filters[commodity]": COMMODITY,
     }
     try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
             payload = resp.json()
@@ -365,38 +443,83 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
     cache_key = f"{days}|{','.join(sorted(states))}"
-    if (
-        not force
-        and _cache["data"] is not None
-        and _cache.get("key") == cache_key
-        and now - _cache["fetched_at"] < CACHE_TTL_SECONDS
-    ):
-        cached: PricesResponse = _cache["data"]
-        return cached.model_copy(
-            update={"cache_age_seconds": int(now - _cache["fetched_at"])}
-        )
 
+    with _cache_lock:
+        mem = _cache
+        if (
+            not force
+            and mem["data"] is not None
+            and mem.get("key") == cache_key
+            and now - float(mem["fetched_at"]) < CACHE_TTL_SECONDS
+        ):
+            return _cached_response(mem["data"], float(mem["fetched_at"]), now)
+
+    disk_data, disk_at = _read_disk_cache(cache_key)
+    if disk_data is not None and not force and now - disk_at < CACHE_TTL_SECONDS:
+        with _cache_lock:
+            _cache["data"] = disk_data
+            _cache["fetched_at"] = disk_at
+            _cache["key"] = cache_key
+        return _cached_response(disk_data, disk_at, now)
+
+    try:
+        response = await _fetch_prices_fresh(days, states)
+    except Exception:
+        # Prefer last good board over a hard failure (cold start / upstream outage)
+        if disk_data is not None and now - disk_at < STALE_TTL_SECONDS:
+            return _cached_response(disk_data, disk_at, now)
+        with _cache_lock:
+            if (
+                _cache["data"] is not None
+                and _cache.get("key") == cache_key
+                and now - float(_cache["fetched_at"]) < STALE_TTL_SECONDS
+            ):
+                return _cached_response(_cache["data"], float(_cache["fetched_at"]), now)
+        raise
+
+    with _cache_lock:
+        _cache["data"] = response
+        _cache["fetched_at"] = now
+        _cache["key"] = cache_key
+    _write_disk_cache(cache_key, response, now)
+    return response
+
+
+async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
     to_d = date.today()
-    from_d = to_d - timedelta(days=max(days, 7))
+    # Multi-state boards use a shorter window so AGMARKNET pagination stays quick
+    lookback = 7 if len(states) > 2 else max(days, 7)
+    from_d = to_d - timedelta(days=lookback)
     from_s, to_s = from_d.isoformat(), to_d.isoformat()
 
-    loop = asyncio.get_event_loop()
-    tasks = [
-        loop.run_in_executor(None, _fetch_agmarknet_state, state, from_s, to_s)
-        for state in states
-    ]
-    results = await asyncio.gather(*tasks)
+    loop = asyncio.get_running_loop()
+    datagov_task = asyncio.create_task(_fetch_datagovin())
+
+    per_state_timeout = 12.0 if len(states) > 2 else 20.0
+
+    async def one_state(state: str) -> list[dict]:
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch_agmarknet_state, state, from_s, to_s),
+                timeout=per_state_timeout,
+            )
+        except Exception:
+            return []
+
+    results = await asyncio.gather(*(one_state(state) for state in states))
     raw: list[dict] = []
     for batch in results:
         raw.extend(batch)
 
-    # Merge open-data live feed (may include same-day extras)
-    datagov = await _fetch_datagovin()
-    raw.extend(datagov)
+    try:
+        datagov = await asyncio.wait_for(datagov_task, timeout=6.0)
+        raw.extend(datagov)
+    except Exception:
+        datagov_task.cancel()
 
     records = _normalize(raw)
-    history = _build_history(raw, days=days)
-    response = PricesResponse(
+    history = _build_history(raw, days=min(days, lookback))
+    return PricesResponse(
         updated_at=datetime.now().isoformat(timespec="seconds"),
         source="AGMARKNET (api.agmarknet.gov.in) + data.gov.in",
         cache_age_seconds=0,
@@ -405,11 +528,6 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
         history=history,
         top_markets=_build_top_markets(records),
     )
-
-    _cache["data"] = response
-    _cache["fetched_at"] = now
-    _cache["key"] = cache_key
-    return response
 
 
 @app.get("/api/health")
@@ -534,13 +652,12 @@ async def post_agent_quote(body: AgentQuoteIn):
 
 @app.on_event("startup")
 async def warmup():
-    """Warm cache on boot so first UI load is fast."""
-    # Ensure agent quote store exists (user submissions only — no seed rates)
+    """Warm Karnataka cache on boot for a fast first paint."""
     try:
         agent_store.list_quotes(days=30)
     except Exception:
         pass
     try:
-        await _load_prices(days=14, states=["Karnataka"], force=True)
+        await _load_prices(days=14, states=DEFAULT_STATES, force=False)
     except Exception:
         pass
