@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/SRYN.png?v=2" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#061611" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Sryn Mandi" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Live arecanut mandi prices plus local agent purchase averages from users at your place."
+    />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('sryn-theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+          document.documentElement.setAttribute('data-theme', theme)
+          document.documentElement.style.colorScheme = theme
+          var loc = localStorage.getItem('sryn-locale')
+          if (!loc) {
+            var langs = navigator.languages || [navigator.language || 'en']
+            for (var i = 0; i < langs.length; i++) {
+              var c = String(langs[i] || '').toLowerCase()
+              if (c.indexOf('kn') === 0) {
+                loc = 'kn'
+                break
+              }
+              if (c.indexOf('hi') === 0) {
+                loc = 'hi'
+                break
+              }
+            }
+            loc = loc || 'en'
+          }
+          document.documentElement.lang = loc === 'kn' ? 'kn' : loc === 'hi' ? 'hi' : 'en'
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark')
+        }
+      })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Syne:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>Sryn Areca nut's — Live Mandi</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
