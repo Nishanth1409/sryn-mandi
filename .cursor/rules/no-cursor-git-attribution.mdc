@@ -1,0 +1,11 @@
+---
+description: Never attribute git commits or PRs to Cursor Agent
+alwaysApply: true
+---
+
+# Git authorship
+
+- All commits and PRs must be attributed only to the repo owner (Nishanth K R / Nishanth1409).
+- Never add `Co-authored-by: Cursor`, `Co-authored-by: cursoragent`, `Made-with: Cursor`, or any Cursor attribution trailer to commit messages or PR bodies.
+- Do not pass `--trailer` with Cursor attribution when committing.
+- If a commit message somehow includes Cursor attribution, remove it before pushing.
