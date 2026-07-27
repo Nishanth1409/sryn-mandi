@@ -112,7 +112,9 @@ function VarietyTable({
           </h3>
           <p>{headNote}</p>
           {isStale && rateDate && rows.length ? (
-            <p className="variety-card__stale">{t('ratesAsOfStale', { date: rateDate })}</p>
+            <p className="variety-card__stale">
+              {t('notTodaysRate')} · {t('ratesAsOfStale', { date: rateDate })}
+            </p>
           ) : rateDate && rows.length && !isStale ? (
             <p className="variety-card__stale is-live">{t('asOf', { date: rateDate })}</p>
           ) : null}
@@ -151,7 +153,17 @@ function VarietyTable({
                   </div>
                 </div>
                 <div className={`lot-card__date ${isStale || !isBoardDateToday(r.arrival_date) ? 'is-stale' : ''}`}>
-                  {t('rateDate')}: {r.arrival_date}
+                  {!isBoardDateToday(r.arrival_date) ? (
+                    <>
+                      <strong>{t('notTodaysRate')}</strong>
+                      {' · '}
+                      {t('rateDate')}: {r.arrival_date}
+                    </>
+                  ) : (
+                    <>
+                      {t('rateDate')}: {r.arrival_date}
+                    </>
+                  )}
                 </div>
               </article>
             ))}
@@ -834,7 +846,7 @@ export function LocalPlacePanel({
                 </span>
                 {placeSelected?.isStale && placeSelected.rateDate ? (
                   <span className="local-avg__stale">
-                    {t('ratesAsOfStale', { date: placeSelected.rateDate })}
+                    {t('notTodaysRate')} · {t('ratesAsOfStale', { date: placeSelected.rateDate })}
                   </span>
                 ) : null}
               </div>

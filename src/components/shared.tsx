@@ -82,14 +82,26 @@ export function filterToBoardDate<T extends { arrival_date: string }>(
 ): T[] {
   if (!boardDate) return records
   const filtered = records.filter(
-    (r) => r.arrival_date === boardDate || (isBoardDateToday(boardDate) && isBoardDateToday(r.arrival_date)),
+    (r) =>
+      r.arrival_date === boardDate ||
+      (isBoardDateToday(boardDate) && isBoardDateToday(r.arrival_date)),
   )
-  return filtered.length ? filtered : records
+  if (filtered.length) return filtered
+  // Never mix older lots into a "today" board
+  if (isBoardDateToday(boardDate)) return filtered
+  const fallbackDay = pickLiveBoardDate(records)
+  if (!fallbackDay) return records
+  return records.filter(
+    (r) =>
+      r.arrival_date === fallbackDay ||
+      (isBoardDateToday(fallbackDay) && isBoardDateToday(r.arrival_date)),
+  )
 }
 
 /**
- * For a place/variety group: prefer live board day, else newest older day.
- * Empty only when that grade has never been reported in the nearby set.
+ * For a place/variety group:
+ * 1) Always force today's rates when that grade has today's arrivals
+ * 2) Else show newest older day and mark as not today
  */
 export function selectRateRowsForGrade<T extends { arrival_date: string }>(
   rows: T[],
@@ -107,23 +119,30 @@ export function selectRateRowsForGrade<T extends { arrival_date: string }>(
     return matched.length ? matched : null
   }
 
-  const onPreferred = tryDate(preferredBoardDate)
-  if (onPreferred) {
-    const date = preferredBoardDate!
-    return { rows: onPreferred, rateDate: date, isStale: !isBoardDateToday(date) }
-  }
-
+  // Force today first whenever today's posts exist for this grade
   const today = formatBoardDate()
   const onToday = tryDate(today)
   if (onToday) return { rows: onToday, rateDate: today, isStale: false }
 
+  // Prefer the live board day only when it is not today (today already failed)
+  if (preferredBoardDate && !isBoardDateToday(preferredBoardDate)) {
+    const onPreferred = tryDate(preferredBoardDate)
+    if (onPreferred) {
+      return { rows: onPreferred, rateDate: preferredBoardDate, isStale: true }
+    }
+  }
+
   const newest = pickLiveBoardDate(rows)
   if (!newest) return { rows, rateDate: null, isStale: false }
+  if (isBoardDateToday(newest)) {
+    const forced = tryDate(newest) || rows
+    return { rows: forced, rateDate: today, isStale: false }
+  }
   const fallback = tryDate(newest) || rows
   return {
     rows: fallback,
     rateDate: newest,
-    isStale: !isBoardDateToday(newest),
+    isStale: true,
   }
 }
 

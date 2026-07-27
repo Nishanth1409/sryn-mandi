@@ -391,7 +391,11 @@ export function RatesPanel({
             ? t('boardDateLive', { date: tradingDate })
             : t('boardDateLatest', { date: tradingDate })}
         </strong>
-        {!todayBoard ? <span>{t('ratesAsOfStale', { date: tradingDate })}</span> : null}
+        {!todayBoard ? (
+          <span>
+            {t('notTodaysRate')} · {t('ratesAsOfStale', { date: tradingDate })}
+          </span>
+        ) : null}
       </div>
 
       <div className="status">

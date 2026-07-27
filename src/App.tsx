@@ -12,7 +12,7 @@ import {
 import { InstallAppBanner } from './components/InstallAppBanner'
 import { usePrefs } from './i18n/PrefsContext'
 import { useDevicePlace } from './hooks/useDevicePlace'
-import { isBoardDateToday, filterToBoardDate, pickLiveBoardDate } from './components/shared'
+import { isBoardDateToday, filterToBoardDate, pickLiveBoardDate, formatBoardDate } from './components/shared'
 import type { PricesResponse } from './types'
 import './index.css'
 
@@ -36,6 +36,7 @@ export default function App() {
   const [scope, setScope] = useState<'karnataka' | 'india'>('india')
   const scopeRef = useRef(scope)
   const hasDataRef = useRef(false)
+  const forcedTodayRefreshRef = useRef(false)
   scopeRef.current = scope
   const { status: geoStatus, place, message: geoMessage, locate } = useDevicePlace()
 
@@ -114,6 +115,10 @@ export default function App() {
 
   const boardDate = useMemo(() => {
     if (!data) return null
+    // Force today's board whenever any lot has today's arrival date
+    if (data.records.some((r) => isBoardDateToday(r.arrival_date))) {
+      return formatBoardDate()
+    }
     return data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records)
   }, [data])
 
@@ -124,6 +129,14 @@ export default function App() {
 
   const boardIsToday = Boolean(boardDate && isBoardDateToday(boardDate))
   const staleBoardDate = boardDate && !boardIsToday ? boardDate : null
+
+  // If board is not today, hard-refresh once so newly published today's rates replace cache
+  useEffect(() => {
+    if (!data?.records?.length || forcedTodayRefreshRef.current) return
+    if (boardIsToday) return
+    forcedTodayRefreshRef.current = true
+    void load(true)
+  }, [data, boardIsToday, load])
 
   const updatedLabel = useMemo(() => {
     if (!data?.updated_at) return t('syncingAgmarknet')

@@ -458,7 +458,7 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
-    cache_key = f"live2|{days}|{','.join(sorted(states))}"
+    cache_key = f"live3|{days}|{','.join(sorted(states))}"
 
     with _cache_lock:
         mem = _cache
