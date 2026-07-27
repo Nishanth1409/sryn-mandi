@@ -10,7 +10,13 @@ import {
 import { PrefsControls } from './PrefsControls'
 import { usePrefs } from '../i18n/PrefsContext'
 import type { HistoryPoint, PriceRecord, SummaryStats, TopMarket } from '../types'
-import { formatCompact, formatINR, TrendDelta } from './shared'
+import {
+  formatCompact,
+  formatINR,
+  isBoardDateToday,
+  resolveBoardDate,
+  TrendDelta,
+} from './shared'
 import { useMemo } from 'react'
 
 export type FiltersState = {
@@ -26,11 +32,13 @@ export function HeroOverlay({
   onRefresh,
   loading,
   updatedLabel,
+  livePrefix = true,
 }: {
   onExplore: () => void
   onRefresh: () => void
   loading?: boolean
   updatedLabel: string
+  livePrefix?: boolean
 }) {
   const { t } = usePrefs()
 
@@ -50,7 +58,13 @@ export function HeroOverlay({
           <PrefsControls />
           <div className="live">
             <i />
-            {t('live')} · {updatedLabel}
+            {livePrefix ? (
+              <>
+                {t('live')} · {updatedLabel}
+              </>
+            ) : (
+              updatedLabel
+            )}
           </div>
         </div>
       </div>
@@ -86,27 +100,20 @@ export function StatsStrip({
   updatedAt?: string
 }) {
   const { t } = usePrefs()
-  const liveDate = useMemo(() => {
-    if (summary.latest_date) return summary.latest_date
-    if (updatedAt) {
-      const d = new Date(updatedAt)
-      if (!Number.isNaN(d.getTime())) {
-        const dd = String(d.getDate()).padStart(2, '0')
-        const mm = String(d.getMonth() + 1).padStart(2, '0')
-        return `${dd}-${mm}-${d.getFullYear()}`
-      }
-    }
-    const now = new Date()
-    const dd = String(now.getDate()).padStart(2, '0')
-    const mm = String(now.getMonth() + 1).padStart(2, '0')
-    return `${dd}-${mm}-${now.getFullYear()}`
-  }, [summary.latest_date, updatedAt])
+  const liveDate = useMemo(
+    () => resolveBoardDate(summary.latest_date, updatedAt),
+    [summary.latest_date, updatedAt],
+  )
+  const todayBoard = isBoardDateToday(liveDate)
+  const dateHint = todayBoard
+    ? t('asOf', { date: liveDate })
+    : t('ratesAsOfStale', { date: liveDate })
 
   const items = [
     {
       label: t('avgModal'),
       value: formatINR(summary.avg_modal),
-      hint: t('asOf', { date: liveDate }),
+      hint: dateHint,
     },
     {
       label: t('shivamogga'),
@@ -274,6 +281,7 @@ export function RatesPanel({
   onRefresh,
   loading,
   updatedAt,
+  boardDate,
 }: {
   records: PriceRecord[]
   filters: FiltersState
@@ -281,8 +289,20 @@ export function RatesPanel({
   onRefresh: () => void
   loading?: boolean
   updatedAt: string
+  boardDate?: string | null
 }) {
   const { t, locale } = usePrefs()
+
+  const tradingDate = useMemo(() => {
+    if (boardDate) return boardDate
+    const fromRows = records.map((r) => r.arrival_date).filter(Boolean)
+    if (!fromRows.length) return resolveBoardDate(null, updatedAt)
+    const counts = new Map<string, number>()
+    for (const d of fromRows) counts.set(d, (counts.get(d) || 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+  }, [boardDate, records, updatedAt])
+
+  const todayBoard = isBoardDateToday(tradingDate)
 
   const scoped = useMemo(() => {
     return records.filter((r) => {
@@ -362,12 +382,28 @@ export function RatesPanel({
         </button>
       </div>
 
+      <div
+        className={`board-date-banner ${todayBoard ? 'is-today' : 'is-stale'}`}
+        role="status"
+      >
+        <strong>
+          {todayBoard
+            ? t('boardDateLive', { date: tradingDate })
+            : t('boardDateLatest', { date: tradingDate })}
+        </strong>
+        {!todayBoard ? <span>{t('ratesAsOfStale', { date: tradingDate })}</span> : null}
+      </div>
+
       <div className="status">
         <span>{t('compactLots', { n: filtered.length })}</span>
         <span>
           {filters.district || filters.state || t('focusArecaBelt')}
         </span>
-        <span>{new Date(updatedAt).toLocaleString(dateLocale)}</span>
+        <span>
+          {t('syncedAt', {
+            time: new Date(updatedAt).toLocaleString(dateLocale),
+          })}
+        </span>
       </div>
 
       <div className="chips">
@@ -520,7 +556,9 @@ export function RatesPanel({
                   {formatINR(r.min_price)} – {formatINR(r.max_price)}
                 </span>
                 <TrendDelta change={r.change} changePct={r.change_pct} />
-                <span className="mandi-date">{r.arrival_date}</span>
+                <span className="mandi-date" title={t('rateDate')}>
+                  {t('rateDate')}: {r.arrival_date}
+                </span>
               </div>
             </article>
           ))

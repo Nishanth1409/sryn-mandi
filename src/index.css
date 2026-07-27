@@ -845,11 +845,17 @@ html[data-theme='light'] .hero-copy {
   color: var(--ink-dim);
 }
 
-.mandi-range,
-.mandi-date {
+.mandi-range {
   font-size: 0.78rem;
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
+}
+
+.mandi-date {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 @media (max-width: 720px) {
@@ -1216,6 +1222,39 @@ table.rates tr.featured td {
   color: var(--leaf-glow);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.board-date-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0 var(--space-panel-x) 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.board-date-banner strong {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.board-date-banner span {
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+}
+
+.board-date-banner.is-today {
+  border-color: color-mix(in srgb, var(--leaf-glow) 35%, var(--line));
+  background: color-mix(in srgb, var(--leaf-glow) 10%, transparent);
+}
+
+.board-date-banner.is-stale {
+  border-color: color-mix(in srgb, #c9a227 40%, var(--line));
+  background: color-mix(in srgb, #c9a227 12%, transparent);
 }
 
 .status {

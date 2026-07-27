@@ -12,6 +12,7 @@ import {
 import { InstallAppBanner } from './components/InstallAppBanner'
 import { usePrefs } from './i18n/PrefsContext'
 import { useDevicePlace } from './hooks/useDevicePlace'
+import { isBoardDateToday } from './components/shared'
 import type { PricesResponse } from './types'
 import './index.css'
 
@@ -111,12 +112,19 @@ export default function App() {
     }
   }, [load])
 
+  const boardIsToday = Boolean(
+    data?.summary.latest_date && isBoardDateToday(data.summary.latest_date),
+  )
+  const staleBoardDate =
+    data?.summary.latest_date && !boardIsToday ? data.summary.latest_date : null
+
   const updatedLabel = useMemo(() => {
     if (!data?.updated_at) return t('syncingAgmarknet')
+    if (staleBoardDate) return t('ratesAsOfStale', { date: staleBoardDate })
     const age = data.cache_age_seconds
     if (age < 60) return t('justNow')
     return t('minutesAgo', { n: Math.round(age / 60) })
-  }, [data, t])
+  }, [data, staleBoardDate, t])
 
   const scrollToRates = () => {
     document.getElementById('local')?.scrollIntoView({ behavior: 'smooth' })
@@ -134,6 +142,7 @@ export default function App() {
       <div className="app-overlay">
         <HeroOverlay
           updatedLabel={updatedLabel}
+          livePrefix={!staleBoardDate}
           onExplore={scrollToRates}
           onRefresh={() => void load(true)}
           loading={refreshing}
@@ -173,6 +182,7 @@ export default function App() {
                 onRefresh={() => void load(true)}
                 loading={refreshing}
                 updatedAt={data.updated_at}
+                boardDate={data.summary.latest_date}
               />
             </>
           ) : null}
