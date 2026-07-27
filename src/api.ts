@@ -1,5 +1,5 @@
 import type { PricesResponse } from './types'
-import type { VarietyAverage } from './geo/agentRates'
+import type { PlaceVarietyStat, VarietyAverage } from './geo/agentRates'
 import type { VarietyBucketKey } from './geo/mandis'
 import { apiUrl } from './apiBase'
 
@@ -44,27 +44,36 @@ export type AgentQuotesResponse = {
   note: string
   count: number
   averages_by_variety: Record<string, VarietyAverage>
+  stats_by_place: PlaceVarietyStat[]
   quotes: {
     id: string
     variety_key: string
     rate: number
     district: string
+    market?: string
     quote_date: string
   }[]
 }
 
 export async function fetchAgentQuotes(options?: {
   district?: string
+  market?: string
   variety_key?: string
   days?: number
 }): Promise<AgentQuotesResponse> {
   const params = new URLSearchParams()
   if (options?.district) params.set('district', options.district)
+  if (options?.market) params.set('market', options.market)
   if (options?.variety_key) params.set('variety_key', options.variety_key)
   params.set('days', String(options?.days ?? 30))
   const res = await fetch(apiUrl(`/api/agent-quotes?${params}`))
   if (!res.ok) throw new Error('Failed to load agent quotes')
-  return res.json()
+  const data = (await res.json()) as AgentQuotesResponse
+  return {
+    ...data,
+    stats_by_place: data.stats_by_place || [],
+    averages_by_variety: data.averages_by_variety || {},
+  }
 }
 
 export async function submitAgentQuote(body: {
@@ -75,6 +84,7 @@ export async function submitAgentQuote(body: {
   note?: string
   lat?: number
   lng?: number
+  market_modal?: number
 }): Promise<{ ok: boolean; quote: { id: string; rate: number; variety_key: string } }> {
   const res = await fetch(apiUrl('/api/agent-quotes'), {
     method: 'POST',

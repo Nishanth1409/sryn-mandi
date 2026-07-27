@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { fetchAgentQuotes, submitAgentQuote } from '../api'
 import {
+  AGENT_MAX_OVER_MARKET,
   buildAgentRateRows,
-  summarizeAgentPremium,
+  groupPlaceStats,
+  summarizeAgentRange,
+  type PlaceVarietyStat,
   type VarietyAverage,
 } from '../geo/agentRates'
 import {
+  ARECA_MANDIS,
   VARIETY_BUCKETS,
   matchesVarietyBucket,
   type MandiPoint,
@@ -70,6 +74,10 @@ function bucketRows(rows: PriceRecord[], key: VarietyBucketKey): PriceRecord[] {
   return rows
     .filter((r) => matchesVarietyBucket(r.variety, bucket.match))
     .sort((a, b) => b.modal_price - a.modal_price)
+}
+
+function placeLabel(mandi: MandiPoint): string {
+  return `${mandi.market} · ${mandi.district}`
 }
 
 function VarietyTable({
@@ -188,6 +196,7 @@ function AgentRatesBoard({
 }) {
   const { t } = usePrefs()
   const [averages, setAverages] = useState<Record<string, VarietyAverage>>({})
+  const [placeStats, setPlaceStats] = useState<PlaceVarietyStat[]>([])
   const [sourceNote, setSourceNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -195,23 +204,40 @@ function AgentRatesBoard({
   const [variety, setVariety] = useState<VarietyBucketKey>('rashi')
   const [rate, setRate] = useState('')
 
+  const label = placeLabel(place.mandi)
+
   const reloadQuotes = useCallback(async () => {
     try {
-      const data = await fetchAgentQuotes({ district: place.mandi.district, days: 30 })
+      const data = await fetchAgentQuotes({
+        district: place.mandi.district,
+        market: place.mandi.market,
+        days: 30,
+      })
       setAverages(data.averages_by_variety || {})
+      setPlaceStats(data.stats_by_place || [])
       setSourceNote(data.note)
     } catch {
       setAverages({})
+      setPlaceStats([])
     }
-  }, [place.mandi.district])
+  }, [place.mandi.district, place.mandi.market])
 
   useEffect(() => {
     void reloadQuotes()
   }, [reloadQuotes])
 
   const rows = useMemo(() => buildAgentRateRows(placeRows, averages), [placeRows, averages])
-  const summary = useMemo(() => summarizeAgentPremium(rows), [rows])
-  const hasData = rows.some((r) => r.agentRate != null && r.agentRate > 0)
+  const summary = useMemo(() => summarizeAgentRange(rows), [rows])
+  const hasData = rows.some((r) => r.agentMin != null && r.agentMax != null)
+  const placeGroups = useMemo(() => groupPlaceStats(placeStats), [placeStats])
+
+  const selectedMandiModal = useMemo(() => {
+    const row = rows.find((r) => r.varietyKey === variety)
+    return row?.mandiModal && row.mandiModal > 0 ? row.mandiModal : null
+  }, [rows, variety])
+
+  const allowedMax =
+    selectedMandiModal != null ? selectedMandiModal + AGENT_MAX_OVER_MARKET : null
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -220,6 +246,22 @@ function AgentRatesBoard({
     const n = Number(rate.replace(/,/g, ''))
     if (!Number.isFinite(n) || n < 1000) {
       setFormError(t('enterCorrectAmount'))
+      return
+    }
+    if (selectedMandiModal == null) {
+      setFormError(t('agentNeedMarket'))
+      return
+    }
+    if (n < selectedMandiModal) {
+      setFormError(t('agentBelowMarket', { rate: formatINR(selectedMandiModal) }))
+      return
+    }
+    if (n > selectedMandiModal + AGENT_MAX_OVER_MARKET) {
+      setFormError(
+        t('agentAboveMarketCap', {
+          max: formatINR(selectedMandiModal + AGENT_MAX_OVER_MARKET),
+        }),
+      )
       return
     }
     setSaving(true)
@@ -232,11 +274,12 @@ function AgentRatesBoard({
         note: 'User-submitted local purchase rate',
         lat: place.lat,
         lng: place.lng,
+        market_modal: selectedMandiModal,
       })
       setFormOk(
         t('formOk', {
           variety,
-          district: place.mandi.district,
+          place: label,
         }),
       )
       setRate('')
@@ -253,7 +296,7 @@ function AgentRatesBoard({
       <div className="section-head">
         <div>
           <h2>{t('agentTitle')}</h2>
-          <p>{t('agentBody', { district: place.mandi.district })}</p>
+          <p>{t('agentBody', { place: label })}</p>
         </div>
       </div>
 
@@ -263,6 +306,7 @@ function AgentRatesBoard({
           <li>{t('agentHow1')}</li>
           <li>{t('agentHow2')}</li>
           <li>{t('agentHow3')}</li>
+          <li>{t('agentHow4')}</li>
         </ul>
         {sourceNote ? (
           <p className="agent-note" style={{ padding: 0 }}>
@@ -296,6 +340,16 @@ function AgentRatesBoard({
             placeholder={t('enterAmount')}
             required
           />
+          {selectedMandiModal != null && allowedMax != null ? (
+            <small className="field-hint">
+              {t('agentAllowedRange', {
+                min: formatINR(selectedMandiModal),
+                max: formatINR(allowedMax),
+              })}
+            </small>
+          ) : (
+            <small className="field-hint">{t('agentNeedMarket')}</small>
+          )}
         </div>
         <div className="field">
           <label>&nbsp;</label>
@@ -307,27 +361,21 @@ function AgentRatesBoard({
       {formError ? <p className="form-msg err">{formError}</p> : null}
       {formOk ? <p className="form-msg ok">{formOk}</p> : null}
 
-      {summary.avgAgent != null ? (
+      {summary.agentMin != null && summary.agentMax != null ? (
         <div className="agent-summary">
           <div>
             <label>{t('placeMandiAvg')}</label>
-            <strong>{summary.avgMandi != null ? formatINR(summary.avgMandi) : '—'}</strong>
-          </div>
-          <div>
-            <label>{t('localAgentAvg', { district: place.mandi.district })}</label>
-            <strong className="agent-hi">{formatINR(summary.avgAgent)}</strong>
-          </div>
-          <div>
-            <label>{t('vsMandi')}</label>
-            <strong
-              className={
-                summary.avgPremium != null && summary.avgPremium >= 0 ? 'agent-hi' : undefined
-              }
-            >
-              {summary.avgPremium == null
-                ? '—'
-                : `${summary.avgPremium >= 0 ? '+' : ''}${formatINR(summary.avgPremium)}`}
+            <strong>
+              {summary.mandiModal != null ? formatINR(summary.mandiModal) : '—'}
             </strong>
+          </div>
+          <div>
+            <label>{t('localAgentMin')}</label>
+            <strong className="agent-hi">{formatINR(summary.agentMin)}</strong>
+          </div>
+          <div>
+            <label>{t('localAgentMax')}</label>
+            <strong className="agent-hi">{formatINR(summary.agentMax)}</strong>
             <span style={{ fontSize: '0.75rem', color: 'var(--ink-dim)' }}>
               {t(summary.reportCount === 1 ? 'submissions' : 'submissionsPlural', {
                 n: summary.reportCount,
@@ -339,17 +387,15 @@ function AgentRatesBoard({
 
       <div className="table-wrap">
         {!hasData ? (
-          <div className="empty">
-            {t('noAgentAmounts', { district: place.mandi.district })}
-          </div>
+          <div className="empty">{t('noAgentAmounts', { place: label })}</div>
         ) : (
           <table className="rates agent-table">
             <thead>
               <tr>
                 <th>{t('variety')}</th>
                 <th>{t('modal')}</th>
-                <th>{t('localAgentAvgCol')}</th>
-                <th>{t('range')}</th>
+                <th>{t('localAgentMin')}</th>
+                <th>{t('localAgentMax')}</th>
                 <th>{t('reports')}</th>
                 <th>{t('vsMandi')}</th>
               </tr>
@@ -358,7 +404,7 @@ function AgentRatesBoard({
               {rows.map((r) => (
                 <tr
                   key={r.varietyKey}
-                  className={r.agentSource === 'user_average' ? 'featured' : undefined}
+                  className={r.agentSource === 'user_minmax' ? 'featured' : undefined}
                 >
                   <td>
                     <div className="market">
@@ -366,32 +412,27 @@ function AgentRatesBoard({
                         {r.title} <span className="tag">{r.kannada}</span>
                       </strong>
                       <small>
-                        {place.mandi.district}
+                        {label}
                         {r.latestDate ? ` · ${t('updated', { date: r.latestDate })}` : ''}
                       </small>
                     </div>
                   </td>
                   <td className="num">{r.mandiModal ? formatINR(r.mandiModal) : '—'}</td>
                   <td className="num agent-hi">
-                    {r.agentRate != null ? formatINR(r.agentRate) : '—'}
+                    {r.agentMin != null ? formatINR(r.agentMin) : '—'}
                   </td>
-                  <td className="num">
-                    {r.agentMin != null && r.agentMax != null
-                      ? `${formatINR(r.agentMin)} – ${formatINR(r.agentMax)}`
-                      : '—'}
+                  <td className="num agent-hi">
+                    {r.agentMax != null ? formatINR(r.agentMax) : '—'}
                   </td>
                   <td>{r.agentCount || '—'}</td>
                   <td className="num">
-                    {r.premium != null ? (
-                      <span className={`delta ${r.premium >= 0 ? 'up' : 'down'}`}>
-                        {r.premium >= 0 ? '+' : ''}
-                        {formatINR(r.premium)}
-                        {r.premiumPct != null ? (
-                          <small style={{ display: 'block', fontWeight: 500 }}>
-                            {r.premium >= 0 ? '+' : ''}
-                            {r.premiumPct}%
-                          </small>
-                        ) : null}
+                    {r.premiumMin != null && r.premiumMax != null ? (
+                      <span className={`delta ${r.premiumMin >= 0 ? 'up' : 'down'}`}>
+                        {r.premiumMin >= 0 ? '+' : ''}
+                        {formatINR(r.premiumMin)}
+                        {' – '}
+                        {r.premiumMax >= 0 ? '+' : ''}
+                        {formatINR(r.premiumMax)}
                       </span>
                     ) : (
                       '—'
@@ -403,6 +444,48 @@ function AgentRatesBoard({
           </table>
         )}
       </div>
+
+      {placeGroups.length > 0 ? (
+        <div className="agent-place-groups">
+          <h3>{t('amountsAtPlace')}</h3>
+          {placeGroups.map((group) => (
+            <article className="agent-place-card" key={`${group.district}|${group.market}`}>
+              <header>
+                <strong>{group.placeLabel}</strong>
+                <small>{t('locationCol')}</small>
+              </header>
+              <ul>
+                {group.rows.map((row) => {
+                  const bucket = VARIETY_BUCKETS.find((b) => b.key === row.variety_key)
+                  return (
+                    <li key={`${row.place_label}|${row.variety_key}`}>
+                      <div>
+                        <strong>
+                          {bucket?.title || row.variety_key}
+                          {bucket ? ` (${bucket.kannada})` : ''}
+                        </strong>
+                        <span>
+                          {t('range')}: {formatINR(row.min_rate)} – {formatINR(row.max_rate)} ·{' '}
+                          {t(row.count === 1 ? 'submissions' : 'submissionsPlural', {
+                            n: row.count,
+                          })}
+                        </span>
+                      </div>
+                      <div className="agent-amount-chips">
+                        {(row.rates || []).map((amount, idx) => (
+                          <span key={`${row.variety_key}-${amount}-${idx}`}>
+                            {formatINR(amount)}
+                          </span>
+                        ))}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       <p className="agent-note">{t('agentNote')}</p>
     </div>
@@ -423,10 +506,50 @@ export function LocalPlacePanel({
   onRetryLocate: () => void
 }) {
   const { t } = usePrefs()
+  const [placeMode, setPlaceMode] = useState<'gps' | 'manual'>('gps')
+  const [manualDistrict, setManualDistrict] = useState('')
+  const [manualMandiId, setManualMandiId] = useState('')
+
+  const districts = useMemo(
+    () => Array.from(new Set(ARECA_MANDIS.map((m) => m.district))).sort(),
+    [],
+  )
+
+  const marketsForDistrict = useMemo(
+    () =>
+      ARECA_MANDIS.filter((m) => !manualDistrict || m.district === manualDistrict).sort((a, b) =>
+        a.market.localeCompare(b.market),
+      ),
+    [manualDistrict],
+  )
+
+  const manualMandi = useMemo(
+    () => ARECA_MANDIS.find((m) => m.id === manualMandiId) || null,
+    [manualMandiId],
+  )
+
+  const activePlace: DevicePlace | null = useMemo(() => {
+    if (placeMode === 'manual') {
+      if (!manualMandi) return null
+      return {
+        lat: manualMandi.lat,
+        lng: manualMandi.lng,
+        accuracyM: 0,
+        mandi: manualMandi,
+        distanceKm: 0,
+        label: placeLabel(manualMandi),
+      }
+    }
+    return place
+  }, [placeMode, manualMandi, place])
+
+  const activeReady =
+    placeMode === 'manual' ? Boolean(manualMandi) : status === 'ready' && Boolean(place)
+
   const resolved = useMemo(() => {
-    if (!place) return null
-    return filterPlaceRecords(records, place.mandi)
-  }, [records, place])
+    if (!activePlace) return null
+    return filterPlaceRecords(records, activePlace.mandi)
+  }, [records, activePlace])
 
   const placeAvg = useMemo(() => {
     if (!resolved) return null
@@ -450,6 +573,13 @@ export function LocalPlacePanel({
     ) as Record<VarietyBucketKey, number | null>
   }, [varietyGroups])
 
+  useEffect(() => {
+    if (placeMode === 'gps' && place && !manualDistrict) {
+      setManualDistrict(place.mandi.district)
+      setManualMandiId(place.mandi.id)
+    }
+  }, [placeMode, place, manualDistrict])
+
   return (
     <section className="shell" id="local">
       <div className="glass local-hero">
@@ -458,36 +588,117 @@ export function LocalPlacePanel({
             <h2>{t('yourPlaceRates')}</h2>
             <p>{t('yourPlaceBody')}</p>
           </div>
-          <button className="btn btn-ghost" type="button" onClick={onRetryLocate}>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => {
+              setPlaceMode('gps')
+              onRetryLocate()
+            }}
+          >
             {status === 'locating' ? t('locating') : t('useMyLocation')}
           </button>
         </div>
 
-        {status === 'locating' || status === 'idle' ? (
+        <div className="place-mode-row">
+          <button
+            type="button"
+            className={`chip ${placeMode === 'gps' ? 'on' : ''}`}
+            onClick={() => setPlaceMode('gps')}
+          >
+            {t('placeModeGps')}
+          </button>
+          <button
+            type="button"
+            className={`chip ${placeMode === 'manual' ? 'on' : ''}`}
+            onClick={() => setPlaceMode('manual')}
+          >
+            {t('placeModeManual')}
+          </button>
+        </div>
+
+        {placeMode === 'manual' ? (
+          <div className="place-manual-form">
+            <p className="agent-note" style={{ padding: 0 }}>
+              {t('manualPlaceHint')}
+            </p>
+            <div className="agent-form">
+              <div className="field">
+                <label htmlFor="pd">{t('chooseDistrict')}</label>
+                <select
+                  id="pd"
+                  value={manualDistrict}
+                  onChange={(e) => {
+                    setManualDistrict(e.target.value)
+                    setManualMandiId('')
+                  }}
+                >
+                  <option value="">{t('chooseDistrict')}</option>
+                  {districts.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="pm">{t('chooseMarket')}</label>
+                <select
+                  id="pm"
+                  value={manualMandiId}
+                  onChange={(e) => setManualMandiId(e.target.value)}
+                  disabled={!manualDistrict}
+                >
+                  <option value="">{t('chooseMarket')}</option>
+                  {marketsForDistrict.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.market}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {placeMode === 'gps' && (status === 'locating' || status === 'idle') ? (
           <div className="loading">{t('readingLocation')}</div>
         ) : null}
 
-        {(status === 'denied' || status === 'error' || status === 'unsupported') && (
+        {placeMode === 'gps' &&
+        (status === 'denied' || status === 'error' || status === 'unsupported') ? (
           <div className="error">
             <p>{message}</p>
             <button className="btn btn-gold" type="button" onClick={onRetryLocate}>
               {t('allowLocationRetry')}
             </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              style={{ marginLeft: '0.5rem' }}
+              onClick={() => setPlaceMode('manual')}
+            >
+              {t('placeModeManual')}
+            </button>
           </div>
-        )}
+        ) : null}
 
-        {status === 'ready' && place ? (
+        {activeReady && activePlace ? (
           <>
             <div className="local-meta">
               <div>
-                <label>{t('detectedPlace')}</label>
-                <strong>{place.mandi.district}</strong>
+                <label>
+                  {placeMode === 'manual' ? t('selectedPlace') : t('detectedPlace')}
+                </label>
+                <strong>{activePlace.mandi.district}</strong>
                 <span>
-                  {t('nearestApmc', {
-                    market: place.mandi.market,
-                    km: place.distanceKm,
-                    m: place.accuracyM,
-                  })}
+                  {placeMode === 'gps'
+                    ? t('nearestApmc', {
+                        market: activePlace.mandi.market,
+                        km: activePlace.distanceKm,
+                        m: activePlace.accuracyM,
+                      })
+                    : activePlace.mandi.market}
                 </span>
               </div>
               <div className="local-avg">
@@ -497,11 +708,11 @@ export function LocalPlacePanel({
                   {resolved?.scope === 'market'
                     ? t('acrossLotsAt', {
                         n: resolved.marketRows.length,
-                        market: place.mandi.market,
+                        market: activePlace.mandi.market,
                       })
                     : t('districtLots', {
                         n: resolved?.districtRows.length ?? 0,
-                        district: place.mandi.district,
+                        district: activePlace.mandi.district,
                       })}
                 </span>
               </div>
@@ -523,9 +734,9 @@ export function LocalPlacePanel({
         ) : null}
       </div>
 
-      {status === 'ready' && place && resolved ? (
+      {activeReady && activePlace && resolved ? (
         <>
-          <AgentRatesBoard placeRows={resolved.marketRows} place={place} />
+          <AgentRatesBoard placeRows={resolved.marketRows} place={activePlace} />
           <div className="variety-grid">
             {varietyGroups.map((g) => (
               <VarietyTable key={g.key} title={g.title} kannada={g.kannada} rows={g.rows} />

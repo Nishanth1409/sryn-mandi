@@ -645,33 +645,80 @@ class AgentQuoteIn(BaseModel):
     quote_date: str | None = None
     lat: float | None = None
     lng: float | None = None
+    market_modal: float | None = Field(
+        None,
+        description="Official mandi modal for this place+variety; used to validate agent amount",
+    )
+
+
+AGENT_MAX_OVER_MARKET = 3000
 
 
 @app.get("/api/agent-quotes")
 async def get_agent_quotes(
     district: str | None = Query(None),
+    market: str | None = Query(None, description="Optional APMC / place filter"),
     variety_key: str | None = Query(None),
     days: int = Query(30, ge=1, le=90),
 ):
-    quotes = agent_store.list_quotes(district=district, variety_key=variety_key, days=days)
-    averages = agent_store.averages_by_variety(district=district, days=days)
+    quotes = agent_store.list_quotes(
+        district=district, market=market, variety_key=variety_key, days=days
+    )
+    by_variety = agent_store.averages_by_variety(
+        district=district, market=market, days=days
+    )
+    by_place = agent_store.stats_by_place_and_variety(district=district, days=days)
+    if market:
+        needle = market.lower().strip()
+        by_place = [
+            row
+            for row in by_place
+            if needle in str(row.get("market") or "").lower()
+            or str(row.get("market") or "").lower() in needle
+        ]
     return {
         "source": "user_submissions",
         "note": (
-            "Local agent rates come only from users/agents who submit their actual purchase "
-            "amounts on this website for their GPS location. The shown rate is the average of "
-            "all submissions for that district + variety. AGMARKNET does not publish private agent quotes."
+            "Local agent amounts come only from users/agents who submit their real purchase "
+            "₹/quintal on this site for a place (GPS or chosen APMC). For the same place + variety, "
+            "we show the minimum and maximum submitted amounts — not an average. "
+            f"Each amount must be at least the mandi market rate and at most ₹{AGENT_MAX_OVER_MARKET} above it. "
+            "AGMARKNET does not publish private agent quotes."
         ),
         "count": len(quotes),
-        "averages_by_variety": averages,
+        "averages_by_variety": by_variety,
+        "stats_by_place": by_place,
         "quotes": quotes,
     }
 
 
 @app.post("/api/agent-quotes")
 async def post_agent_quote(body: AgentQuoteIn):
+    modal = body.market_modal
+    if modal is None or modal <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Mandi market rate is required for this variety at this place before submitting.",
+        )
+    floor = float(modal)
+    ceiling = floor + AGENT_MAX_OVER_MARKET
+    if body.rate < floor:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Amount cannot be less than the mandi market rate (₹{round(floor):,}).",
+        )
+    if body.rate > ceiling:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Amount cannot exceed the mandi market rate by more than ₹{AGENT_MAX_OVER_MARKET:,}. "
+                f"Max allowed: ₹{round(ceiling):,}."
+            ),
+        )
     try:
-        row = agent_store.add_quote(body.model_dump())
+        payload = body.model_dump()
+        payload.pop("market_modal", None)
+        row = agent_store.add_quote(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "quote": row}

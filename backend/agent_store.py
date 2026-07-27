@@ -1,9 +1,10 @@
-"""User-submitted local agent purchase rates, averaged by location + variety."""
+"""User-submitted local agent purchase rates, min/max by place + variety."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import uuid
 from datetime import date, datetime
@@ -25,6 +26,10 @@ VALID_VARIETIES = {"sarakku", "bede", "rashi", "andal"}
 
 def _today() -> str:
     return date.today().isoformat()
+
+
+def _norm_place(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
 
 def _ensure_store() -> list[dict[str, Any]]:
@@ -63,9 +68,19 @@ def _same_district(requested: str | None, stored: str) -> bool:
     return False
 
 
+def _same_market(requested: str | None, stored: str) -> bool:
+    if not requested:
+        return True
+    return _norm_place(requested) == _norm_place(stored) or (
+        _norm_place(requested) in _norm_place(stored)
+        or _norm_place(stored) in _norm_place(requested)
+    )
+
+
 def list_quotes(
     *,
     district: str | None = None,
+    market: str | None = None,
     variety_key: str | None = None,
     days: int = 30,
 ) -> list[dict[str, Any]]:
@@ -89,6 +104,8 @@ def list_quotes(
             continue
         if not _same_district(district, str(q.get("district", ""))):
             continue
+        if market and not _same_market(market, str(q.get("market", ""))):
+            continue
         if variety_key and q.get("variety_key") != variety_key:
             continue
         out.append(q)
@@ -97,41 +114,92 @@ def list_quotes(
     return out
 
 
+def _rate_stats(items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    rates = [round(float(i["rate"])) for i in items if i.get("rate")]
+    if not rates:
+        return None
+    latest = items[0]
+    return {
+        "count": len(rates),
+        "min_rate": min(rates),
+        "max_rate": max(rates),
+        "rates": sorted(rates),
+        "latest_rate": round(float(latest.get("rate") or 0)),
+        "latest_date": latest.get("quote_date"),
+        "unit": "Rs./Quintal",
+        "source": "user_minmax",
+    }
+
+
 def averages_by_variety(
     district: str | None = None,
+    market: str | None = None,
     days: int = 30,
 ) -> dict[str, dict[str, Any]]:
     """
-    For each variety at this location: average of all user-submitted agent purchase rates.
-    Returns count, avg, min, max, latest rate + date.
+    District (optional market) rollup per variety: min/max of user-submitted amounts.
+    Kept under the old function name for API compatibility — no average is the primary value.
     """
     buckets: dict[str, list[dict[str, Any]]] = {k: [] for k in VALID_VARIETIES}
-    for q in list_quotes(district=district, days=days):
+    for q in list_quotes(district=district, market=market, days=days):
         key = str(q.get("variety_key") or "")
         if key in buckets:
             buckets[key].append(q)
 
     result: dict[str, dict[str, Any]] = {}
     for key, items in buckets.items():
-        if not items:
+        stats = _rate_stats(items)
+        if not stats:
             continue
-        rates = [float(i["rate"]) for i in items if i.get("rate")]
-        if not rates:
-            continue
-        latest = items[0]
         result[key] = {
             "variety_key": key,
             "district": district,
-            "count": len(rates),
-            "avg_rate": round(sum(rates) / len(rates)),
-            "min_rate": round(min(rates)),
-            "max_rate": round(max(rates)),
-            "latest_rate": round(float(latest.get("rate") or 0)),
-            "latest_date": latest.get("quote_date"),
-            "unit": "Rs./Quintal",
-            "source": "user_average",
+            "market": market,
+            **stats,
         }
     return result
+
+
+def stats_by_place_and_variety(
+    district: str | None = None,
+    days: int = 30,
+) -> list[dict[str, Any]]:
+    """
+    Group submissions by place (district + market) and variety.
+    Many agents at the same place → min and max for that place only.
+    """
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for q in list_quotes(district=district, days=days):
+        variety = str(q.get("variety_key") or "")
+        if variety not in VALID_VARIETIES:
+            continue
+        dist = str(q.get("district") or district or "").strip() or "Unknown"
+        market = str(q.get("market") or "Local agent").strip() or "Local agent"
+        groups.setdefault((dist, market, variety), []).append(q)
+
+    rows: list[dict[str, Any]] = []
+    for (dist, market, variety), items in groups.items():
+        stats = _rate_stats(items)
+        if not stats:
+            continue
+        rows.append(
+            {
+                "district": dist,
+                "market": market,
+                "place_label": f"{market} · {dist}",
+                "variety_key": variety,
+                **stats,
+            }
+        )
+
+    rows.sort(
+        key=lambda r: (
+            str(r.get("district") or ""),
+            str(r.get("market") or ""),
+            str(r.get("variety_key") or ""),
+        )
+    )
+    return rows
 
 
 def add_quote(payload: dict[str, Any]) -> dict[str, Any]:
@@ -147,13 +215,17 @@ def add_quote(payload: dict[str, Any]) -> dict[str, Any]:
     if len(district) < 2:
         raise ValueError("district is required")
 
+    market = str(payload.get("market") or "Local agent purchase").strip()[:120]
+    if len(market) < 2:
+        market = "Local agent purchase"
+
     row = {
         "id": str(uuid.uuid4()),
         "variety_key": variety_key,
         "rate": round(rate),
         "unit": "Rs./Quintal",
         "district": district,
-        "market": str(payload.get("market") or "Local agent purchase").strip()[:120],
+        "market": market,
         "source": "user",
         "note": str(payload.get("note") or "User-submitted local purchase rate").strip()[:240],
         "quote_date": str(payload.get("quote_date") or _today())[:10],
