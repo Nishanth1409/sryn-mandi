@@ -512,11 +512,7 @@ export function RatesPanel({
             ? t('boardDateLive', { date: tradingDate })
             : t('boardDateLatest', { date: tradingDate })}
         </strong>
-        {!todayBoard ? (
-          <span>
-            {t('notTodaysRate')} · {t('ratesAsOfStale', { date: tradingDate })}
-          </span>
-        ) : null}
+        {!todayBoard ? <span>{t('ratesAsOfStale', { date: tradingDate })}</span> : null}
       </div>
 
       <div className="status">
@@ -550,36 +546,38 @@ export function RatesPanel({
         ))}
       </div>
 
-      <div className="picker-block">
-        <label className="picker-label">{t('pickState')}</label>
-        <div className="chip-scroll" role="listbox" aria-label={t('pickState')}>
-          <button
-            type="button"
-            className={`chip ${!filters.state ? 'on' : ''}`}
-            onClick={() => onChange({ ...filters, state: '', district: '' })}
-          >
-            {t('all')}
-          </button>
-          {states.map((s) => (
+      {filters.focus === 'all' ? (
+        <div className="picker-block">
+          <label className="picker-label">{t('pickState')}</label>
+          <div className="chip-scroll" role="listbox" aria-label={t('pickState')}>
             <button
-              key={s.name}
               type="button"
-              className={`chip ${filters.state === s.name ? 'on' : ''}`}
-              onClick={() =>
-                onChange({
-                  ...filters,
-                  state: s.name,
-                  district: '',
-                  focus: s.name === 'Karnataka' ? 'karnataka' : 'all',
-                })
-              }
+              className={`chip ${!filters.state ? 'on' : ''}`}
+              onClick={() => onChange({ ...filters, state: '', district: '' })}
             >
-              {s.name}
-              <em>{s.count}</em>
+              {t('all')}
             </button>
-          ))}
+            {states.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                className={`chip ${filters.state === s.name ? 'on' : ''}`}
+                onClick={() =>
+                  onChange({
+                    ...filters,
+                    state: s.name,
+                    district: '',
+                    focus: s.name === 'Karnataka' ? 'karnataka' : 'all',
+                  })
+                }
+              >
+                {s.name}
+                <em>{s.count}</em>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="picker-block">
         <label className="picker-label">{t('pickDistrict')}</label>

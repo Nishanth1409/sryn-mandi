@@ -3,9 +3,6 @@ import { fetchAgentQuotes, submitAgentQuote } from '../api'
 import {
   AGENT_MAX_OVER_MARKET,
   buildAgentRateRows,
-  groupPlaceStats,
-  summarizeAgentRange,
-  type PlaceVarietyStat,
   type VarietyAverage,
 } from '../geo/agentRates'
 import {
@@ -245,7 +242,6 @@ function AgentRatesBoard({
 }) {
   const { t } = usePrefs()
   const [averages, setAverages] = useState<Record<string, VarietyAverage>>({})
-  const [placeStats, setPlaceStats] = useState<PlaceVarietyStat[]>([])
   const [sourceNote, setSourceNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -292,11 +288,9 @@ function AgentRatesBoard({
         days: 30,
       })
       setAverages(data.averages_by_variety || {})
-      setPlaceStats(data.stats_by_place || [])
       setSourceNote(data.note)
     } catch {
       setAverages({})
-      setPlaceStats([])
     }
   }, [formMandi.district, formMandi.market])
 
@@ -308,9 +302,7 @@ function AgentRatesBoard({
     () => buildAgentRateRows(formPlaceRows, averages),
     [formPlaceRows, averages],
   )
-  const summary = useMemo(() => summarizeAgentRange(rows), [rows])
   const hasData = rows.some((r) => r.agentMin != null && r.agentMax != null)
-  const placeGroups = useMemo(() => groupPlaceStats(placeStats), [placeStats])
 
   const selectedMandiModal = useMemo(() => {
     const row = rows.find((r) => r.varietyKey === variety)
@@ -391,20 +383,16 @@ function AgentRatesBoard({
         </div>
       </div>
 
-      <div className="agent-sources">
-        <strong>{t('agentHowTitle')}</strong>
+      <details className="agent-how">
+        <summary>{t('agentHowTitle')}</summary>
         <ul>
           <li>{t('agentHow1')}</li>
           <li>{t('agentHow2')}</li>
           <li>{t('agentHow3')}</li>
           <li>{t('agentHow4')}</li>
         </ul>
-        {sourceNote ? (
-          <p className="agent-note" style={{ padding: 0 }}>
-            {sourceNote}
-          </p>
-        ) : null}
-      </div>
+        {sourceNote ? <p className="agent-note">{sourceNote}</p> : null}
+      </details>
 
       <form className="agent-form agent-form--full" onSubmit={onSubmit}>
         <div className="field">
@@ -499,30 +487,6 @@ function AgentRatesBoard({
       {formError ? <p className="form-msg err">{formError}</p> : null}
       {formOk ? <p className="form-msg ok">{formOk}</p> : null}
 
-      {summary.agentMin != null && summary.agentMax != null ? (
-        <div className="agent-summary">
-          <div>
-            <label>{t('placeMandiAvg')}</label>
-            <strong>
-              {summary.mandiModal != null ? formatINR(summary.mandiModal) : '—'}
-            </strong>
-          </div>
-          <div>
-            <label>{t('localAgentMin')}</label>
-            <strong className="agent-hi">{formatINR(summary.agentMin)}</strong>
-          </div>
-          <div>
-            <label>{t('localAgentMax')}</label>
-            <strong className="agent-hi">{formatINR(summary.agentMax)}</strong>
-            <span style={{ fontSize: '0.75rem', color: 'var(--ink-dim)' }}>
-              {t(summary.reportCount === 1 ? 'submissions' : 'submissionsPlural', {
-                n: summary.reportCount,
-              })}
-            </span>
-          </div>
-        </div>
-      ) : null}
-
       <div className="table-wrap">
         {!hasData ? (
           <div className="empty">{t('noAgentAmounts', { place: label })}</div>
@@ -582,50 +546,6 @@ function AgentRatesBoard({
           </table>
         )}
       </div>
-
-      {placeGroups.length > 0 ? (
-        <div className="agent-place-groups">
-          <h3>{t('amountsAtPlace')}</h3>
-          {placeGroups.map((group) => (
-            <article className="agent-place-card" key={`${group.district}|${group.market}`}>
-              <header>
-                <strong>{group.placeLabel}</strong>
-                <small>{t('locationCol')}</small>
-              </header>
-              <ul>
-                {group.rows.map((row) => {
-                  const bucket = VARIETY_BUCKETS.find((b) => b.key === row.variety_key)
-                  return (
-                    <li key={`${row.place_label}|${row.variety_key}`}>
-                      <div>
-                        <strong>
-                          {bucket?.title || row.variety_key}
-                          {bucket ? ` (${bucket.kannada})` : ''}
-                        </strong>
-                        <span>
-                          {t('range')}: {formatINR(row.min_rate)} – {formatINR(row.max_rate)} ·{' '}
-                          {t(row.count === 1 ? 'submissions' : 'submissionsPlural', {
-                            n: row.count,
-                          })}
-                        </span>
-                      </div>
-                      <div className="agent-amount-chips">
-                        {(row.rates || []).map((amount, idx) => (
-                          <span key={`${row.variety_key}-${amount}-${idx}`}>
-                            {formatINR(amount)}
-                          </span>
-                        ))}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </article>
-          ))}
-        </div>
-      ) : null}
-
-      <p className="agent-note">{t('agentNote')}</p>
     </div>
   )
 }
@@ -929,7 +849,7 @@ export function LocalPlacePanel({
                 ) : placeSummary.rateDate ? (
                   <span className={placeSummary.isStale ? 'local-avg__stale' : 'local-avg__live'}>
                     {placeSummary.isStale
-                      ? `${t('notTodaysRate')} · ${t('ratesAsOfStale', { date: placeSummary.rateDate })}`
+                      ? t('ratesAsOfStale', { date: placeSummary.rateDate })
                       : t('asOf', { date: placeSummary.rateDate })}
                   </span>
                 ) : null}
@@ -941,41 +861,24 @@ export function LocalPlacePanel({
 
       {activeReady && activePlace && resolved ? (
         <>
-          <AgentRatesBoard
-            records={records}
-            place={activePlace}
-            onQuotesUpdated={() => setAgentTick((n) => n + 1)}
-          />
-
           <div className="glass local-grade-strip">
             <div className="local-variety-stats">
-              {varietyGroups.map((g) => {
-                const agent = agentByKey[g.key]
-                const hasAgent = agent?.agentMin != null && agent?.agentMax != null
-                return (
-                  <div key={g.key} className="local-variety-stat">
-                    <label>
-                      {g.title} <em>{g.kannada}</em>
-                    </label>
-                    <strong>
-                      {varietyAvgs[g.key] != null ? formatINR(varietyAvgs[g.key]!) : '—'}
-                    </strong>
-                    {g.rateDate ? (
-                      <small className={g.isStale ? 'is-stale' : ''}>
-                        {g.isStale ? t('notTodaysRate') : t('live')} · {g.rateDate}
-                      </small>
-                    ) : null}
-                    <small className={hasAgent ? 'agent-ok' : 'agent-missing'}>
-                      {hasAgent
-                        ? t('localAgentRange', {
-                            min: formatINR(agent!.agentMin!),
-                            max: formatINR(agent!.agentMax!),
-                          })
-                        : t('agentNotUpdated')}
+              {varietyGroups.map((g) => (
+                <div key={g.key} className="local-variety-stat">
+                  <label>
+                    {g.title} <em>{g.kannada}</em>
+                  </label>
+                  <strong>
+                    {varietyAvgs[g.key] != null ? formatINR(varietyAvgs[g.key]!) : '—'}
+                  </strong>
+                  {g.rateDate ? (
+                    <small className={g.isStale ? 'is-stale' : ''}>
+                      {g.rateDate}
+                      {g.isStale ? ` · ${t('notTodaysRate')}` : ''}
                     </small>
-                  </div>
-                )
-              })}
+                  ) : null}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1004,6 +907,12 @@ export function LocalPlacePanel({
               )
             })}
           </div>
+
+          <AgentRatesBoard
+            records={records}
+            place={activePlace}
+            onQuotesUpdated={() => setAgentTick((n) => n + 1)}
+          />
         </>
       ) : null}
     </section>

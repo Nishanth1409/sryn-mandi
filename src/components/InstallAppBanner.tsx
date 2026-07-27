@@ -6,11 +6,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-function isIos(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
-}
-
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false
   return (
@@ -20,10 +15,10 @@ function isStandalone(): boolean {
   )
 }
 
+/** Only show when the browser actually offers install — keeps the first screen clean. */
 export function InstallAppBanner() {
   const { t } = usePrefs()
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
-  const [iosHint, setIosHint] = useState(false)
   const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
@@ -36,14 +31,12 @@ export function InstallAppBanner() {
       setDeferred(e as BeforeInstallPromptEvent)
     }
     window.addEventListener('beforeinstallprompt', onBip)
-    if (isIos()) setIosHint(true)
     return () => window.removeEventListener('beforeinstallprompt', onBip)
   }, [])
 
-  if (hidden || (!deferred && !iosHint)) return null
+  if (hidden || !deferred) return null
 
   const onInstall = async () => {
-    if (!deferred) return
     await deferred.prompt()
     const choice = await deferred.userChoice
     if (choice.outcome === 'accepted') setHidden(true)
@@ -54,14 +47,12 @@ export function InstallAppBanner() {
     <div className="shell install-banner glass" role="region" aria-label={t('installApp')}>
       <div>
         <strong>{t('installApp')}</strong>
-        <p>{iosHint && !deferred ? t('installIosHint') : t('installAndroidHint')}</p>
+        <p>{t('installAndroidHint')}</p>
       </div>
       <div className="install-actions">
-        {deferred ? (
-          <button className="btn btn-gold" type="button" onClick={() => void onInstall()}>
-            {t('installNow')}
-          </button>
-        ) : null}
+        <button className="btn btn-gold" type="button" onClick={() => void onInstall()}>
+          {t('installNow')}
+        </button>
         <button className="btn btn-ghost" type="button" onClick={() => setHidden(true)}>
           {t('installLater')}
         </button>
