@@ -195,7 +195,12 @@ export default function App() {
                 onRetryLocate={locate}
                 boardDate={boardDate}
               />
-              <TrendsPanel history={data.history} topMarkets={data.top_markets} />
+              <TrendsPanel
+                history={data.history}
+                historyByVariety={data.history_by_variety}
+                topMarkets={data.top_markets}
+                records={liveRecords}
+              />
               <RatesPanel
                 records={liveRecords}
                 filters={filters}

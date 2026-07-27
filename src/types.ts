@@ -57,5 +57,6 @@ export interface PricesResponse {
   records: PriceRecord[]
   board_date?: string | null
   history: HistoryPoint[]
+  history_by_variety?: Record<string, HistoryPoint[]>
   top_markets: TopMarket[]
 }

@@ -1173,6 +1173,48 @@ table.rates tr.featured td {
   color: var(--ink-dim);
 }
 
+.trend-variety-picker {
+  padding-top: 0;
+  padding-bottom: 0.35rem;
+}
+
+.trend-chart-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.trend-chart-caption strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.trend-chart-caption span {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-side-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.top-list .empty-inline {
+  display: block;
+  padding: 0.75rem 0;
+  color: var(--ink-dim);
+  font-size: 0.88rem;
+  list-style: none;
+}
+
 .trend-grid {
   display: grid;
   grid-template-columns: 1.55fr 1fr;

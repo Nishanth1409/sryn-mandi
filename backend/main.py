@@ -122,6 +122,7 @@ class PricesResponse(BaseModel):
     records: list[PriceRecord]
     board_date: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
+    history_by_variety: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     top_markets: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -404,6 +405,58 @@ def _build_history(raw_rows: list[dict], days: int = 30) -> list[dict[str, Any]]
     return history
 
 
+# Same headline grades as the local place board (Sarakku / Bede / Rashi / Andal)
+_VARIETY_BUCKETS: list[tuple[str, tuple[str, ...]]] = [
+    ("sarakku", ("saraku", "sarakku", "sarak")),
+    ("bede", ("bette", "bede", "tattibettee", "tatti bettee")),
+    ("rashi", ("rashi", "rasi")),
+    ("andal", ("andal", "andaal", "gorabalu", "gorabal")),
+]
+
+
+def _variety_bucket_key(variety: str) -> str | None:
+    v = (variety or "").lower().strip()
+    if not v:
+        return None
+    for key, needles in _VARIETY_BUCKETS:
+        if any(v == n or n in v for n in needles):
+            return key
+    return None
+
+
+def _history_from_buckets(buckets: dict[str, list[float]]) -> list[dict[str, Any]]:
+    history: list[dict[str, Any]] = []
+    for day in sorted(buckets.keys()):
+        vals = buckets[day]
+        history.append(
+            {
+                "date": day,
+                "avg": round(sum(vals) / len(vals), 2),
+                "min": round(min(vals), 2),
+                "max": round(max(vals), 2),
+                "count": len(vals),
+            }
+        )
+    return history
+
+
+def _build_history_by_variety(raw_rows: list[dict], days: int = 30) -> dict[str, list[dict[str, Any]]]:
+    """Daily modal avg/min/max per headline variety — not blended across grades."""
+    cutoff = date.today() - timedelta(days=days)
+    by_key: dict[str, dict[str, list[float]]] = {key: {} for key, _ in _VARIETY_BUCKETS}
+    for row in raw_rows:
+        d = _parse_date(row["arrival_date"])
+        if not d or d < cutoff or not row.get("modal_price"):
+            continue
+        bucket = _variety_bucket_key(str(row.get("variety") or ""))
+        if not bucket:
+            continue
+        day = d.isoformat()
+        by_key[bucket].setdefault(day, []).append(float(row["modal_price"]))
+
+    return {key: _history_from_buckets(buckets) for key, buckets in by_key.items()}
+
+
 def _build_top_markets(records: list[PriceRecord], limit: int = 8) -> list[dict]:
     # Prefer latest modal per market (highest variety)
     by_market: dict[str, PriceRecord] = {}
@@ -458,7 +511,7 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
-    cache_key = f"live3|{days}|{','.join(sorted(states))}"
+    cache_key = f"live4|{days}|{','.join(sorted(states))}"
 
     with _cache_lock:
         mem = _cache
@@ -565,7 +618,9 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
     records = _normalize(raw)
     live_day = _pick_live_day(records)
     live_records = _filter_live_day(records, live_day) or records
-    history = _build_history(raw, days=min(days, lookback))
+    hist_days = min(days, lookback)
+    history = _build_history(raw, days=hist_days)
+    history_by_variety = _build_history_by_variety(raw, days=hist_days)
     return PricesResponse(
         updated_at=datetime.now().isoformat(timespec="seconds"),
         source="AGMARKNET (api.agmarknet.gov.in) + data.gov.in",
@@ -574,6 +629,7 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
         records=records,
         board_date=_format_date(live_day) if live_day else None,
         history=history,
+        history_by_variety=history_by_variety,
         top_markets=_build_top_markets(live_records),
     )
 
