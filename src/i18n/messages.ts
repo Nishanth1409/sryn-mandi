@@ -267,7 +267,7 @@ const kn: Record<MessageKey, string> = {
   retry: 'ಮರುಪ್ರಯತ್ನ',
   footer:
     'ಮಂಡಿ ಮಾರುಕಟ್ಟೆ ಮಾಹಿತಿ. AGMARKNET ನಿಂದ ಮಂಡಿ ದರಗಳು. ಪ್ರತಿ ಸ್ಥಳಕ್ಕೆ ಬಳಕೆದಾರರ ನಮೂದುಗಳ ಕನಿಷ್ಠ–ಗರಿಷ್ಠ.',
-  loadError:  loadError: 'ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ',
+  loadError: 'ಮಾರುಕಟ್ಟೆ ದರಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ',
   installApp: 'ಅಪ್ಲಿಕೇಶನ್ ಸ್ಥಾಪಿಸಿ',
   installAndroidHint: 'ಈ ತಾಣವನ್ನು Android ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ಗೆ ಸೇರಿಸಿ — ಇತ್ತೀಚಿನ ಬೋರ್ಡ್‌ಗಳಿಗೆ ಆಫ್‌ಲೈನ್.',
   installIosHint: 'iPhone/iPad: Safari → Share → Add to Home Screen.',
@@ -401,7 +401,7 @@ const hi: Record<MessageKey, string> = {
   retry: 'पुनः प्रयास',
   footer:
     'मंडी बाज़ार जानकारी। AGMARKNET से मंडी दरें। प्रत्येक स्थान पर उपयोगकर्ता प्रविष्टियों का न्यूनतम–अधिकतम।',
-  loadError:  loadError: 'बाज़ार दरें लोड नहीं हो सकीं',
+  loadError: 'बाज़ार दरें लोड नहीं हो सकीं',
   installApp: 'ऐप इंस्टॉल करें',
   installAndroidHint: 'इस साइट को Android होम स्क्रीन पर जोड़ें — हाल के बोर्ड ऑफ़लाइन भी।',
   installIosHint: 'iPhone/iPad: Safari → Share → Add to Home Screen.',
