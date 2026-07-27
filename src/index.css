@@ -1392,6 +1392,42 @@ table.rates tr.featured td {
   font-size: 0.85rem;
 }
 
+.variety-card__stale {
+  margin: 0.35rem 0 0 !important;
+  color: #8a6a12 !important;
+  font-weight: 700;
+  font-size: 0.82rem !important;
+}
+
+.variety-card__stale.is-live {
+  color: var(--leaf-glow) !important;
+  font-weight: 600;
+}
+
+.variety-card.is-stale {
+  border-color: color-mix(in srgb, #c9a227 35%, var(--line));
+}
+
+.lot-card__date {
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
+.lot-card__date.is-stale {
+  color: #8a6a12;
+  font-weight: 800;
+}
+
+.local-avg__stale {
+  display: block;
+  margin-top: 0.25rem;
+  color: #8a6a12;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .variety-table {
   max-height: 320px;
   overflow: auto;
@@ -1449,12 +1485,6 @@ table.rates tr.featured td {
 .lot-card__prices .lot-modal {
   color: var(--nut-soft);
   font-size: 1rem;
-}
-
-.lot-card__date {
-  margin-top: 0.55rem;
-  font-size: 0.78rem;
-  color: var(--ink-dim);
 }
 
 .agent-board {

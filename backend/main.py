@@ -120,6 +120,7 @@ class PricesResponse(BaseModel):
     cache_age_seconds: int
     summary: SummaryStats
     records: list[PriceRecord]
+    board_date: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
     top_markets: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -358,18 +359,24 @@ def _normalize(raw_rows: list[dict]) -> list[PriceRecord]:
         )
 
     records.sort(key=lambda r: (not r.is_shivamogga, -r.modal_price, r.market))
+    # Keep latest lot per market+variety across dates. Live-day filtering is applied
+    # for board summary/top markets; place variety boards may fall back to older dates.
+    return records
 
-    # Keep the board on one live trading day: prefer today, else the newest arrival day.
-    # Older market lots (e.g. 24-07 when today is 27-07) are dropped from the live board.
+
+def _pick_live_day(records: list[PriceRecord]) -> date | None:
     arrival_days = [_parse_date(r.arrival_date) for r in records]
     arrival_days = [d for d in arrival_days if d]
-    if arrival_days:
-        today = date.today()
-        live_day = today if today in arrival_days else max(arrival_days)
-        live_records = [r for r in records if _parse_date(r.arrival_date) == live_day]
-        if live_records:
-            return live_records
-    return records
+    if not arrival_days:
+        return None
+    today = date.today()
+    return today if today in arrival_days else max(arrival_days)
+
+
+def _filter_live_day(records: list[PriceRecord], live_day: date | None) -> list[PriceRecord]:
+    if not live_day:
+        return records
+    return [r for r in records if _parse_date(r.arrival_date) == live_day]
 
 
 def _build_history(raw_rows: list[dict], days: int = 30) -> list[dict[str, Any]]:
@@ -451,7 +458,7 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
-    cache_key = f"live1|{days}|{','.join(sorted(states))}"
+    cache_key = f"live2|{days}|{','.join(sorted(states))}"
 
     with _cache_lock:
         mem = _cache
@@ -556,15 +563,18 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
         datagov_task.cancel()
 
     records = _normalize(raw)
+    live_day = _pick_live_day(records)
+    live_records = _filter_live_day(records, live_day) or records
     history = _build_history(raw, days=min(days, lookback))
     return PricesResponse(
         updated_at=datetime.now().isoformat(timespec="seconds"),
         source="AGMARKNET (api.agmarknet.gov.in) + data.gov.in",
         cache_age_seconds=0,
-        summary=_summary(records),
+        summary=_summary(live_records),
         records=records,
+        board_date=_format_date(live_day) if live_day else None,
         history=history,
-        top_markets=_build_top_markets(records),
+        top_markets=_build_top_markets(live_records),
     )
 
 

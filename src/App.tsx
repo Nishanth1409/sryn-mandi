@@ -12,7 +12,7 @@ import {
 import { InstallAppBanner } from './components/InstallAppBanner'
 import { usePrefs } from './i18n/PrefsContext'
 import { useDevicePlace } from './hooks/useDevicePlace'
-import { isBoardDateToday } from './components/shared'
+import { isBoardDateToday, filterToBoardDate, pickLiveBoardDate } from './components/shared'
 import type { PricesResponse } from './types'
 import './index.css'
 
@@ -112,11 +112,18 @@ export default function App() {
     }
   }, [load])
 
-  const boardIsToday = Boolean(
-    data?.summary.latest_date && isBoardDateToday(data.summary.latest_date),
-  )
-  const staleBoardDate =
-    data?.summary.latest_date && !boardIsToday ? data.summary.latest_date : null
+  const boardDate = useMemo(() => {
+    if (!data) return null
+    return data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records)
+  }, [data])
+
+  const liveRecords = useMemo(() => {
+    if (!data) return []
+    return filterToBoardDate(data.records, boardDate)
+  }, [data, boardDate])
+
+  const boardIsToday = Boolean(boardDate && isBoardDateToday(boardDate))
+  const staleBoardDate = boardDate && !boardIsToday ? boardDate : null
 
   const updatedLabel = useMemo(() => {
     if (!data?.updated_at) return t('syncingAgmarknet')
@@ -173,16 +180,17 @@ export default function App() {
                 status={geoStatus}
                 message={geoMessage}
                 onRetryLocate={locate}
+                boardDate={boardDate}
               />
               <TrendsPanel history={data.history} topMarkets={data.top_markets} />
               <RatesPanel
-                records={data.records}
+                records={liveRecords}
                 filters={filters}
                 onChange={handleFocusChange}
                 onRefresh={() => void load(true)}
                 loading={refreshing}
                 updatedAt={data.updated_at}
-                boardDate={data.summary.latest_date}
+                boardDate={boardDate}
               />
             </>
           ) : null}

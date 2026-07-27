@@ -18,7 +18,7 @@ import {
 import { usePrefs } from '../i18n/PrefsContext'
 import type { DevicePlace, GeoStatus } from '../hooks/useDevicePlace'
 import type { PriceRecord } from '../types'
-import { formatINR, TrendDelta } from './shared'
+import { formatINR, TrendDelta, selectRateRowsForGrade, isBoardDateToday, pickLiveBoardDate } from './shared'
 
 function avg(nums: number[]): number | null {
   if (!nums.length) return null
@@ -84,29 +84,38 @@ function VarietyTable({
   title,
   kannada,
   rows,
+  rateDate,
+  isStale,
 }: {
   title: string
   kannada: string
   rows: PriceRecord[]
+  rateDate: string | null
+  isStale: boolean
 }) {
   const { t } = usePrefs()
   const modalAvg = avg(rows.map((r) => r.modal_price).filter((n) => n > 0))
 
+  const headNote = !rows.length
+    ? t('noArrivalsNearby')
+    : t(rows.length > 1 ? 'avgModalLotsPlural' : 'avgModalLots', {
+        price: formatINR(modalAvg ?? 0),
+        n: rows.length,
+      })
+
   return (
-    <article className="variety-card glass">
+    <article className={`variety-card glass ${isStale && rows.length ? 'is-stale' : ''}`}>
       <header className="variety-card__head">
         <div>
           <h3>
             {title} <span>{kannada}</span>
           </h3>
-          <p>
-            {rows.length
-              ? t(rows.length > 1 ? 'avgModalLotsPlural' : 'avgModalLots', {
-                  price: formatINR(modalAvg ?? 0),
-                  n: rows.length,
-                })
-              : t('noArrivalsNearby')}
-          </p>
+          <p>{headNote}</p>
+          {isStale && rateDate && rows.length ? (
+            <p className="variety-card__stale">{t('ratesAsOfStale', { date: rateDate })}</p>
+          ) : rateDate && rows.length && !isStale ? (
+            <p className="variety-card__stale is-live">{t('asOf', { date: rateDate })}</p>
+          ) : null}
         </div>
       </header>
 
@@ -141,7 +150,9 @@ function VarietyTable({
                     <strong className="num">{formatINR(r.max_price)}</strong>
                   </div>
                 </div>
-                <div className="lot-card__date">{r.arrival_date}</div>
+                <div className={`lot-card__date ${isStale || !isBoardDateToday(r.arrival_date) ? 'is-stale' : ''}`}>
+                  {t('rateDate')}: {r.arrival_date}
+                </div>
               </article>
             ))}
           </div>
@@ -586,12 +597,14 @@ export function LocalPlacePanel({
   status,
   message,
   onRetryLocate,
+  boardDate,
 }: {
   records: PriceRecord[]
   place: DevicePlace | null
   status: GeoStatus
   message: string | null
   onRetryLocate: () => void
+  boardDate?: string | null
 }) {
   const { t } = usePrefs()
   const [placeMode, setPlaceMode] = useState<'gps' | 'manual'>('gps')
@@ -639,18 +652,34 @@ export function LocalPlacePanel({
     return filterPlaceRecords(records, activePlace.mandi)
   }, [records, activePlace])
 
-  const placeAvg = useMemo(() => {
+  const preferredBoardDate = useMemo(
+    () => boardDate || pickLiveBoardDate(records),
+    [boardDate, records],
+  )
+
+  const placeSelected = useMemo(() => {
     if (!resolved) return null
-    return avg(resolved.marketRows.map((r) => r.modal_price).filter((n) => n > 0))
-  }, [resolved])
+    return selectRateRowsForGrade(resolved.marketRows, preferredBoardDate)
+  }, [resolved, preferredBoardDate])
+
+  const placeAvg = useMemo(() => {
+    if (!placeSelected) return null
+    return avg(placeSelected.rows.map((r) => r.modal_price).filter((n) => n > 0))
+  }, [placeSelected])
 
   const varietyGroups = useMemo(() => {
     if (!resolved) return []
-    return VARIETY_BUCKETS.map((b) => ({
-      ...b,
-      rows: bucketRows(resolved.marketRows, b.key),
-    }))
-  }, [resolved])
+    return VARIETY_BUCKETS.map((b) => {
+      const allForGrade = bucketRows(resolved.marketRows, b.key)
+      const selected = selectRateRowsForGrade(allForGrade, preferredBoardDate)
+      return {
+        ...b,
+        rows: selected.rows,
+        rateDate: selected.rateDate,
+        isStale: selected.isStale,
+      }
+    })
+  }, [resolved, preferredBoardDate])
 
   const varietyAvgs = useMemo(() => {
     return Object.fromEntries(
@@ -795,14 +824,19 @@ export function LocalPlacePanel({
                 <span>
                   {resolved?.scope === 'market'
                     ? t('acrossLotsAt', {
-                        n: resolved.marketRows.length,
+                        n: placeSelected?.rows.length ?? 0,
                         market: activePlace.mandi.market,
                       })
                     : t('districtLots', {
-                        n: resolved?.districtRows.length ?? 0,
+                        n: placeSelected?.rows.length ?? 0,
                         district: activePlace.mandi.district,
                       })}
                 </span>
+                {placeSelected?.isStale && placeSelected.rateDate ? (
+                  <span className="local-avg__stale">
+                    {t('ratesAsOfStale', { date: placeSelected.rateDate })}
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -827,7 +861,14 @@ export function LocalPlacePanel({
           <AgentRatesBoard records={records} place={activePlace} />
           <div className="variety-grid">
             {varietyGroups.map((g) => (
-              <VarietyTable key={g.key} title={g.title} kannada={g.kannada} rows={g.rows} />
+              <VarietyTable
+                key={g.key}
+                title={g.title}
+                kannada={g.kannada}
+                rows={g.rows}
+                rateDate={g.rateDate}
+                isStale={g.isStale}
+              />
             ))}
           </div>
         </>

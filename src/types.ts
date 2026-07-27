@@ -55,6 +55,7 @@ export interface PricesResponse {
   cache_age_seconds: number
   summary: SummaryStats
   records: PriceRecord[]
+  board_date?: string | null
   history: HistoryPoint[]
   top_markets: TopMarket[]
 }
