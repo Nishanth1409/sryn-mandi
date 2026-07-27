@@ -93,15 +93,23 @@ function VarietyTable({
   rows,
   rateDate,
   isStale,
+  agent,
 }: {
   title: string
   kannada: string
   rows: PriceRecord[]
   rateDate: string | null
   isStale: boolean
+  agent?: {
+    min: number | null
+    max: number | null
+    count: number
+    latestDate: string | null
+  } | null
 }) {
   const { t } = usePrefs()
   const modalAvg = avg(rows.map((r) => r.modal_price).filter((n) => n > 0))
+  const hasAgent = agent != null && agent.min != null && agent.max != null
 
   const headNote = !rows.length
     ? t('noArrivalsNearby')
@@ -119,14 +127,32 @@ function VarietyTable({
           </h3>
           <p>{headNote}</p>
           {isStale && rateDate && rows.length ? (
-            <p className="variety-card__stale">
-              {t('notTodaysRate')} · {t('ratesAsOfStale', { date: rateDate })}
-            </p>
+            <p className="variety-card__stale">{t('ratesAsOfStale', { date: rateDate })}</p>
           ) : rateDate && rows.length && !isStale ? (
             <p className="variety-card__stale is-live">{t('asOf', { date: rateDate })}</p>
           ) : null}
         </div>
       </header>
+
+      <div className={`grade-agent ${hasAgent ? 'has-data' : 'no-data'}`}>
+        <label>{t('localAgentRate')}</label>
+        {hasAgent ? (
+          <>
+            <strong>
+              {t('localAgentRange', {
+                min: formatINR(agent!.min!),
+                max: formatINR(agent!.max!),
+              })}
+            </strong>
+            <span>
+              {t(agent!.count === 1 ? 'submissions' : 'submissionsPlural', { n: agent!.count })}
+              {agent!.latestDate ? ` · ${t('agentUploadedOn', { date: agent!.latestDate })}` : ''}
+            </span>
+          </>
+        ) : (
+          <p>{t('agentNotUpdated')}</p>
+        )}
+      </div>
 
       {rows.length === 0 ? (
         <div className="empty">{t('waitingApmc')}</div>
@@ -160,17 +186,8 @@ function VarietyTable({
                   </div>
                 </div>
                 <div className={`lot-card__date ${isStale || !isBoardDateToday(r.arrival_date) ? 'is-stale' : ''}`}>
-                  {!isBoardDateToday(r.arrival_date) ? (
-                    <>
-                      <strong>{t('notTodaysRate')}</strong>
-                      {' · '}
-                      {t('rateDate')}: {r.arrival_date}
-                    </>
-                  ) : (
-                    <>
-                      {t('rateDate')}: {r.arrival_date}
-                    </>
-                  )}
+                  {t('rateDate')}: {r.arrival_date}
+                  {!isBoardDateToday(r.arrival_date) ? ` · ${t('notTodaysRate')}` : ''}
                 </div>
               </article>
             ))}
@@ -220,9 +237,11 @@ function VarietyTable({
 function AgentRatesBoard({
   records,
   place,
+  onQuotesUpdated,
 }: {
   records: PriceRecord[]
   place: DevicePlace
+  onQuotesUpdated?: () => void
 }) {
   const { t } = usePrefs()
   const [averages, setAverages] = useState<Record<string, VarietyAverage>>({})
@@ -355,6 +374,7 @@ function AgentRatesBoard({
       setMinRate('')
       setMaxRate('')
       await reloadQuotes()
+      onQuotesUpdated?.()
     } catch (err) {
       setFormError((err as Error).message)
     } finally {
@@ -629,6 +649,8 @@ export function LocalPlacePanel({
   const [placeMode, setPlaceMode] = useState<'gps' | 'manual'>('gps')
   const [manualDistrict, setManualDistrict] = useState('')
   const [manualMandiId, setManualMandiId] = useState('')
+  const [placeAverages, setPlaceAverages] = useState<Record<string, VarietyAverage>>({})
+  const [agentTick, setAgentTick] = useState(0)
 
   const districts = useMemo(
     () => Array.from(new Set(ARECA_MANDIS.map((m) => m.district))).sort(),
@@ -726,6 +748,40 @@ export function LocalPlacePanel({
       ]),
     ) as Record<VarietyBucketKey, number | null>
   }, [varietyGroups])
+
+  useEffect(() => {
+    if (!activePlace) {
+      setPlaceAverages({})
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await fetchAgentQuotes({
+          district: activePlace.mandi.district,
+          market: activePlace.mandi.market,
+          days: 30,
+        })
+        if (!cancelled) setPlaceAverages(data.averages_by_variety || {})
+      } catch {
+        if (!cancelled) setPlaceAverages({})
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activePlace, agentTick])
+
+  const agentRows = useMemo(() => {
+    if (!resolved) return []
+    return buildAgentRateRows(resolved.marketRows, placeAverages)
+  }, [resolved, placeAverages])
+
+  const agentByKey = useMemo(() => {
+    return Object.fromEntries(agentRows.map((r) => [r.varietyKey, r])) as Partial<
+      Record<VarietyBucketKey, (typeof agentRows)[number]>
+    >
+  }, [agentRows])
 
   useEffect(() => {
     if (placeMode === 'gps' && place && !manualDistrict) {
@@ -879,42 +935,74 @@ export function LocalPlacePanel({
                 ) : null}
               </div>
             </div>
-
-            <div className="local-variety-stats">
-              {varietyGroups.map((g) => (
-                <div key={g.key} className="local-variety-stat">
-                  <label>
-                    {g.title} <em>{g.kannada}</em>
-                  </label>
-                  <strong>
-                    {varietyAvgs[g.key] != null ? formatINR(varietyAvgs[g.key]!) : '—'}
-                  </strong>
-                  {g.rateDate ? (
-                    <small className={g.isStale ? 'is-stale' : ''}>
-                      {g.isStale ? t('notTodaysRate') : t('live')} · {g.rateDate}
-                    </small>
-                  ) : null}
-                </div>
-              ))}
-            </div>
           </>
         ) : null}
       </div>
 
       {activeReady && activePlace && resolved ? (
         <>
-          <AgentRatesBoard records={records} place={activePlace} />
+          <AgentRatesBoard
+            records={records}
+            place={activePlace}
+            onQuotesUpdated={() => setAgentTick((n) => n + 1)}
+          />
+
+          <div className="glass local-grade-strip">
+            <div className="local-variety-stats">
+              {varietyGroups.map((g) => {
+                const agent = agentByKey[g.key]
+                const hasAgent = agent?.agentMin != null && agent?.agentMax != null
+                return (
+                  <div key={g.key} className="local-variety-stat">
+                    <label>
+                      {g.title} <em>{g.kannada}</em>
+                    </label>
+                    <strong>
+                      {varietyAvgs[g.key] != null ? formatINR(varietyAvgs[g.key]!) : '—'}
+                    </strong>
+                    {g.rateDate ? (
+                      <small className={g.isStale ? 'is-stale' : ''}>
+                        {g.isStale ? t('notTodaysRate') : t('live')} · {g.rateDate}
+                      </small>
+                    ) : null}
+                    <small className={hasAgent ? 'agent-ok' : 'agent-missing'}>
+                      {hasAgent
+                        ? t('localAgentRange', {
+                            min: formatINR(agent!.agentMin!),
+                            max: formatINR(agent!.agentMax!),
+                          })
+                        : t('agentNotUpdated')}
+                    </small>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="variety-grid">
-            {varietyGroups.map((g) => (
-              <VarietyTable
-                key={g.key}
-                title={g.title}
-                kannada={g.kannada}
-                rows={g.rows}
-                rateDate={g.rateDate}
-                isStale={g.isStale}
-              />
-            ))}
+            {varietyGroups.map((g) => {
+              const agent = agentByKey[g.key]
+              return (
+                <VarietyTable
+                  key={g.key}
+                  title={g.title}
+                  kannada={g.kannada}
+                  rows={g.rows}
+                  rateDate={g.rateDate}
+                  isStale={g.isStale}
+                  agent={
+                    agent
+                      ? {
+                          min: agent.agentMin,
+                          max: agent.agentMax,
+                          count: agent.agentCount,
+                          latestDate: agent.latestDate,
+                        }
+                      : null
+                  }
+                />
+              )
+            })}
           </div>
         </>
       ) : null}

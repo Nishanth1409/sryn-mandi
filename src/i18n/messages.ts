@@ -110,6 +110,10 @@ const en = {
   agentTitle: 'Local agent purchase min & max',
   agentBody:
     'For {place} — agents and users submit the amount they buy at. For the same place and variety we show the lowest and highest amounts only (no average).',
+  localAgentRate: 'Local agent amount',
+  localAgentRange: 'Min {min} · Max {max}',
+  agentNotUpdated: 'Not updated — no agent/user amount uploaded for this grade yet',
+  agentUploadedOn: 'Updated {date}',
   agentHowTitle: 'How local agent amounts work',
   agentHow1: 'Users and local agents enter their real purchase ₹/quintal for a place.',
   agentHow2:
@@ -266,6 +270,10 @@ const kn: Record<MessageKey, string> = {
   agentTitle: 'ಸ್ಥಳೀಯ ಏಜೆಂಟ್ ಖರೀದಿ ಕನಿಷ್ಠ ಮತ್ತು ಗರಿಷ್ಠ',
   agentBody:
     '{place} ಗೆ — ಏಜೆಂಟರು ಮತ್ತು ಬಳಕೆದಾರರು ಖರೀದಿ ಮೊತ್ತ ನೀಡುತ್ತಾರೆ. ಅದೇ ಸ್ಥಳ ಮತ್ತು ವಿಧಕ್ಕೆ ಕನಿಷ್ಠ ಮತ್ತು ಗರಿಷ್ಠ ಮಾತ್ರ (ಸರಾಸರಿ ಇಲ್ಲ).',
+  localAgentRate: 'ಸ್ಥಳೀಯ ಏಜೆಂಟ್ ಮೊತ್ತ',
+  localAgentRange: 'ಕನಿಷ್ಠ {min} · ಗರಿಷ್ಠ {max}',
+  agentNotUpdated: 'ನವೀಕರಣವಿಲ್ಲ — ಈ ಗ್ರೇಡ್‌ಗೆ ಏಜೆಂಟ್/ಬಳಕೆದಾರ ಮೊತ್ತ ಅಪ್‌ಲೋಡ್ ಆಗಿಲ್ಲ',
+  agentUploadedOn: 'ನವೀಕರಣ {date}',
   agentHowTitle: 'ಸ್ಥಳೀಯ ಏಜೆಂಟ್ ಮೊತ್ತ ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ',
   agentHow1: 'ಬಳಕೆದಾರರು ಮತ್ತು ಸ್ಥಳೀಯ ಏಜೆಂಟರು ಒಂದು ಸ್ಥಳಕ್ಕೆ ನಿಜವಾದ ಖರೀದಿ ₹/ಕ್ವಿಂಟಾಲ್ ನಮೂದಿಸುತ್ತಾರೆ.',
   agentHow2:
@@ -422,6 +430,10 @@ const hi: Record<MessageKey, string> = {
   agentTitle: 'स्थानीय एजेंट खरीद न्यूनतम और अधिकतम',
   agentBody:
     '{place} के लिए — एजेंट और उपयोगकर्ता अपनी खरीद राशि देते हैं। उसी स्थान और किस्म पर केवल न्यूनतम और अधिकतम (कोई औसत नहीं)।',
+  localAgentRate: 'स्थानीय एजेंट राशि',
+  localAgentRange: 'न्यूनतम {min} · अधिकतम {max}',
+  agentNotUpdated: 'अपडेट नहीं — इस ग्रेड के लिए एजेंट/उपयोगकर्ता राशि अभी अपलोड नहीं',
+  agentUploadedOn: 'अपडेट {date}',
   agentHowTitle: 'स्थानीय एजेंट राशियाँ कैसे काम करती हैं',
   agentHow1: 'उपयोगकर्ता और स्थानीय एजेंट एक स्थान के लिए वास्तविक खरीद ₹/क्विंटल दर्ज करते हैं।',
   agentHow2:

@@ -1425,6 +1425,64 @@ table.rates tr.featured td {
   padding: var(--space-panel-y) var(--space-panel-x) 0.25rem;
 }
 
+.grade-agent {
+  margin: 0.55rem var(--space-panel-x) 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.grade-agent label {
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+.grade-agent.has-data {
+  border-color: color-mix(in srgb, var(--leaf-glow) 35%, var(--line));
+  background: color-mix(in srgb, var(--leaf-glow) 10%, transparent);
+}
+
+.grade-agent.has-data strong {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.05rem;
+  color: var(--nut-soft);
+  font-weight: 800;
+}
+
+.grade-agent.has-data span {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+}
+
+.grade-agent.no-data p {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
+.local-grade-strip {
+  margin-bottom: var(--space-section-gap);
+  padding-top: var(--space-panel-y);
+}
+
+.local-grade-strip .local-variety-stats {
+  padding-bottom: var(--space-panel-y);
+}
+
+.local-variety-stat small.agent-missing {
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
 .variety-card__head h3 {
   margin: 0;
   font-family: var(--display);
