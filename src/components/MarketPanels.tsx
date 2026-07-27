@@ -184,7 +184,13 @@ export function TrendsPanel({
   topMarkets: TopMarket[]
 }) {
   const { t } = usePrefs()
-  const chartData = history.map((h) => ({ ...h, label: h.date.slice(5) }))
+  const chartData = history.map((h) => {
+    // API history dates are ISO YYYY-MM-DD → show DD-MM (day first, then month)
+    const iso = h.date.slice(0, 10)
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    const label = m ? `${m[3]}-${m[2]}` : h.date.slice(5)
+    return { ...h, label }
+  })
 
   return (
     <section className="shell glass" id="trends">
