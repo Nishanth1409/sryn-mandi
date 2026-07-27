@@ -1361,6 +1361,18 @@ table.rates tr.featured td {
   color: var(--ink);
 }
 
+.local-variety-stat small {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  font-weight: 700;
+}
+
+.local-variety-stat small.is-stale {
+  color: #8a6a12;
+}
+
 .variety-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1426,6 +1438,21 @@ table.rates tr.featured td {
   color: #8a6a12;
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.local-avg__live {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--leaf-glow);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.local-avg__note {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--ink-dim);
+  font-size: 0.75rem;
 }
 
 .variety-table {

@@ -146,6 +146,33 @@ export function selectRateRowsForGrade<T extends { arrival_date: string }>(
   }
 }
 
+/**
+ * Place board date from grade lots only (Sarakku/Bede/…), not unrelated “other” lots.
+ * Forces today when any grade lot is today; else newest grade arrival day.
+ */
+export function pickPlaceGradeBoardDate<T extends { arrival_date: string }>(
+  gradeRows: T[],
+  allNearbyRows?: T[],
+): string | null {
+  const pool = gradeRows.length ? gradeRows : allNearbyRows || []
+  if (!pool.length) return null
+  const today = formatBoardDate()
+  if (pool.some((r) => isBoardDateToday(r.arrival_date))) return today
+  return pickLiveBoardDate(pool)
+}
+
+/** Unique arrival dates newest-first for exact UI labels. */
+export function uniqueArrivalDates(rows: { arrival_date: string }[]): string[] {
+  const seen = new Set<string>()
+  const dates: string[] = []
+  for (const r of rows) {
+    if (!r.arrival_date || seen.has(r.arrival_date)) continue
+    seen.add(r.arrival_date)
+    dates.push(r.arrival_date)
+  }
+  return dates.sort((a, b) => arrivalSortKey(b) - arrivalSortKey(a))
+}
+
 export function TrendDelta({
   change,
   changePct,

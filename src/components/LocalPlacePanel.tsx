@@ -18,7 +18,14 @@ import {
 import { usePrefs } from '../i18n/PrefsContext'
 import type { DevicePlace, GeoStatus } from '../hooks/useDevicePlace'
 import type { PriceRecord } from '../types'
-import { formatINR, TrendDelta, selectRateRowsForGrade, isBoardDateToday, pickLiveBoardDate } from './shared'
+import {
+  formatINR,
+  TrendDelta,
+  selectRateRowsForGrade,
+  isBoardDateToday,
+  pickPlaceGradeBoardDate,
+  uniqueArrivalDates,
+} from './shared'
 
 function avg(nums: number[]): number | null {
   if (!nums.length) return null
@@ -664,25 +671,22 @@ export function LocalPlacePanel({
     return filterPlaceRecords(records, activePlace.mandi)
   }, [records, activePlace])
 
-  const preferredBoardDate = useMemo(
-    () => boardDate || pickLiveBoardDate(records),
-    [boardDate, records],
-  )
-
-  const placeSelected = useMemo(() => {
-    if (!resolved) return null
-    return selectRateRowsForGrade(resolved.marketRows, preferredBoardDate)
-  }, [resolved, preferredBoardDate])
-
-  const placeAvg = useMemo(() => {
-    if (!placeSelected) return null
-    return avg(placeSelected.rows.map((r) => r.modal_price).filter((n) => n > 0))
-  }, [placeSelected])
+  const preferredBoardDate = useMemo(() => {
+    if (!resolved) return boardDate || null
+    const gradeRows = VARIETY_BUCKETS.flatMap((b) => bucketRows(resolved.marketRows, b.key))
+    // Exact place date from grade lots only — ignore unrelated low “other” lots on a newer day
+    return (
+      pickPlaceGradeBoardDate(gradeRows, resolved.marketRows) ||
+      boardDate ||
+      null
+    )
+  }, [resolved, boardDate])
 
   const varietyGroups = useMemo(() => {
     if (!resolved) return []
     return VARIETY_BUCKETS.map((b) => {
       const allForGrade = bucketRows(resolved.marketRows, b.key)
+      // Prefer the place grade board date so Sarakku/Bede/… stay on the same exact day when possible
       const selected = selectRateRowsForGrade(allForGrade, preferredBoardDate)
       return {
         ...b,
@@ -692,6 +696,27 @@ export function LocalPlacePanel({
       }
     })
   }, [resolved, preferredBoardDate])
+
+  const displayedGradeLots = useMemo(
+    () => varietyGroups.flatMap((g) => g.rows),
+    [varietyGroups],
+  )
+
+  const placeSummary = useMemo(() => {
+    const dates = uniqueArrivalDates(displayedGradeLots)
+    const rateDate = dates.length === 1 ? dates[0] : null
+    const mixed = dates.length > 1
+    return {
+      rows: displayedGradeLots,
+      rateDate,
+      dates,
+      mixed,
+      isStale: dates.length > 0 && dates.some((d) => !isBoardDateToday(d)),
+      avg: avg(displayedGradeLots.map((r) => r.modal_price).filter((n) => n > 0)),
+    }
+  }, [displayedGradeLots])
+
+  const placeAvg = placeSummary.avg
 
   const varietyAvgs = useMemo(() => {
     return Object.fromEntries(
@@ -834,33 +859,41 @@ export function LocalPlacePanel({
                 <label>{t('placeAverageModal')}</label>
                 <strong>{placeAvg != null ? formatINR(placeAvg) : '—'}</strong>
                 <span>
-                  {resolved?.scope === 'market'
-                    ? t('acrossLotsAt', {
-                        n: placeSelected?.rows.length ?? 0,
-                        market: activePlace.mandi.market,
-                      })
-                    : t('districtLots', {
-                        n: placeSelected?.rows.length ?? 0,
-                        district: activePlace.mandi.district,
-                      })}
+                  {t('acrossGradeLotsAt', {
+                    n: placeSummary.rows.length,
+                    market: activePlace.mandi.market,
+                  })}
                 </span>
-                {placeSelected?.isStale && placeSelected.rateDate ? (
+                <span className="local-avg__note">{t('placeAvgFromGrades')}</span>
+                {placeSummary.mixed ? (
                   <span className="local-avg__stale">
-                    {t('notTodaysRate')} · {t('ratesAsOfStale', { date: placeSelected.rateDate })}
+                    {t('notTodaysRate')} ·{' '}
+                    {t('mixedRateDates', { dates: placeSummary.dates.join(', ') })}
+                  </span>
+                ) : placeSummary.rateDate ? (
+                  <span className={placeSummary.isStale ? 'local-avg__stale' : 'local-avg__live'}>
+                    {placeSummary.isStale
+                      ? `${t('notTodaysRate')} · ${t('ratesAsOfStale', { date: placeSummary.rateDate })}`
+                      : t('asOf', { date: placeSummary.rateDate })}
                   </span>
                 ) : null}
               </div>
             </div>
 
             <div className="local-variety-stats">
-              {VARIETY_BUCKETS.map((b) => (
-                <div key={b.key} className="local-variety-stat">
+              {varietyGroups.map((g) => (
+                <div key={g.key} className="local-variety-stat">
                   <label>
-                    {b.title} <em>{b.kannada}</em>
+                    {g.title} <em>{g.kannada}</em>
                   </label>
                   <strong>
-                    {varietyAvgs[b.key] != null ? formatINR(varietyAvgs[b.key]!) : '—'}
+                    {varietyAvgs[g.key] != null ? formatINR(varietyAvgs[g.key]!) : '—'}
                   </strong>
+                  {g.rateDate ? (
+                    <small className={g.isStale ? 'is-stale' : ''}>
+                      {g.isStale ? t('notTodaysRate') : t('live')} · {g.rateDate}
+                    </small>
+                  ) : null}
                 </div>
               ))}
             </div>
