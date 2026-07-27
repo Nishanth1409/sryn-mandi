@@ -1581,6 +1581,20 @@ table.rates tr.featured td {
   padding: 0 var(--space-panel-x) 0.55rem;
 }
 
+.agent-form--full {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.agent-form--full .field--action {
+  grid-column: 1 / -1;
+}
+
+.agent-form--full .field--action .btn {
+  width: 100%;
+  max-width: 22rem;
+}
+
 .form-msg {
   margin: 0 var(--space-panel-x) 0.65rem;
   font-size: 0.85rem;

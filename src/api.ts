@@ -78,14 +78,21 @@ export async function fetchAgentQuotes(options?: {
 
 export async function submitAgentQuote(body: {
   variety_key: VarietyBucketKey
-  rate: number
   district: string
   market?: string
   note?: string
   lat?: number
   lng?: number
   market_modal?: number
-}): Promise<{ ok: boolean; quote: { id: string; rate: number; variety_key: string } }> {
+  rate?: number
+  rate_min?: number
+  rate_max?: number
+}): Promise<{
+  ok: boolean
+  quote: { id: string; rate: number; variety_key: string }
+  quotes?: { id: string; rate: number; variety_key: string }[]
+  count?: number
+}> {
   const res = await fetch(apiUrl('/api/agent-quotes'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

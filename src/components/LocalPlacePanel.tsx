@@ -188,10 +188,10 @@ function VarietyTable({
 }
 
 function AgentRatesBoard({
-  placeRows,
+  records,
   place,
 }: {
-  placeRows: PriceRecord[]
+  records: PriceRecord[]
   place: DevicePlace
 }) {
   const { t } = usePrefs()
@@ -201,16 +201,45 @@ function AgentRatesBoard({
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formOk, setFormOk] = useState<string | null>(null)
+  const [formDistrict, setFormDistrict] = useState(place.mandi.district)
+  const [formMandiId, setFormMandiId] = useState(place.mandi.id)
   const [variety, setVariety] = useState<VarietyBucketKey>('rashi')
-  const [rate, setRate] = useState('')
+  const [minRate, setMinRate] = useState('')
+  const [maxRate, setMaxRate] = useState('')
 
-  const label = placeLabel(place.mandi)
+  const districts = useMemo(
+    () => Array.from(new Set(ARECA_MANDIS.map((m) => m.district))).sort(),
+    [],
+  )
+  const marketsForDistrict = useMemo(
+    () =>
+      ARECA_MANDIS.filter((m) => m.district === formDistrict).sort((a, b) =>
+        a.market.localeCompare(b.market),
+      ),
+    [formDistrict],
+  )
+  const formMandi = useMemo(
+    () => ARECA_MANDIS.find((m) => m.id === formMandiId) || place.mandi,
+    [formMandiId, place.mandi],
+  )
+
+  useEffect(() => {
+    setFormDistrict(place.mandi.district)
+    setFormMandiId(place.mandi.id)
+  }, [place.mandi.district, place.mandi.id])
+
+  const formPlaceRows = useMemo(
+    () => filterPlaceRecords(records, formMandi).marketRows,
+    [records, formMandi],
+  )
+
+  const label = placeLabel(formMandi)
 
   const reloadQuotes = useCallback(async () => {
     try {
       const data = await fetchAgentQuotes({
-        district: place.mandi.district,
-        market: place.mandi.market,
+        district: formMandi.district,
+        market: formMandi.market,
         days: 30,
       })
       setAverages(data.averages_by_variety || {})
@@ -220,13 +249,16 @@ function AgentRatesBoard({
       setAverages({})
       setPlaceStats([])
     }
-  }, [place.mandi.district, place.mandi.market])
+  }, [formMandi.district, formMandi.market])
 
   useEffect(() => {
     void reloadQuotes()
   }, [reloadQuotes])
 
-  const rows = useMemo(() => buildAgentRateRows(placeRows, averages), [placeRows, averages])
+  const rows = useMemo(
+    () => buildAgentRateRows(formPlaceRows, averages),
+    [formPlaceRows, averages],
+  )
   const summary = useMemo(() => summarizeAgentRange(rows), [rows])
   const hasData = rows.some((r) => r.agentMin != null && r.agentMax != null)
   const placeGroups = useMemo(() => groupPlaceStats(placeStats), [placeStats])
@@ -239,24 +271,31 @@ function AgentRatesBoard({
   const allowedMax =
     selectedMandiModal != null ? selectedMandiModal + AGENT_MAX_OVER_MARKET : null
 
+  const parseAmount = (raw: string) => Number(raw.replace(/,/g, ''))
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setFormError(null)
     setFormOk(null)
-    const n = Number(rate.replace(/,/g, ''))
-    if (!Number.isFinite(n) || n < 1000) {
+    const minN = parseAmount(minRate)
+    const maxN = parseAmount(maxRate)
+    if (!Number.isFinite(minN) || minN < 1000 || !Number.isFinite(maxN) || maxN < 1000) {
       setFormError(t('enterCorrectAmount'))
+      return
+    }
+    if (minN > maxN) {
+      setFormError(t('minMustBeLeMax'))
       return
     }
     if (selectedMandiModal == null) {
       setFormError(t('agentNeedMarket'))
       return
     }
-    if (n < selectedMandiModal) {
+    if (minN < selectedMandiModal) {
       setFormError(t('agentBelowMarket', { rate: formatINR(selectedMandiModal) }))
       return
     }
-    if (n > selectedMandiModal + AGENT_MAX_OVER_MARKET) {
+    if (maxN > selectedMandiModal + AGENT_MAX_OVER_MARKET) {
       setFormError(
         t('agentAboveMarketCap', {
           max: formatINR(selectedMandiModal + AGENT_MAX_OVER_MARKET),
@@ -268,12 +307,13 @@ function AgentRatesBoard({
     try {
       await submitAgentQuote({
         variety_key: variety,
-        rate: n,
-        district: place.mandi.district,
-        market: place.mandi.market,
-        note: 'User-submitted local purchase rate',
-        lat: place.lat,
-        lng: place.lng,
+        rate_min: minN,
+        rate_max: maxN,
+        district: formMandi.district,
+        market: formMandi.market,
+        note: 'User-submitted local purchase range',
+        lat: formMandi.lat,
+        lng: formMandi.lng,
         market_modal: selectedMandiModal,
       })
       setFormOk(
@@ -282,7 +322,8 @@ function AgentRatesBoard({
           place: label,
         }),
       )
-      setRate('')
+      setMinRate('')
+      setMaxRate('')
       await reloadQuotes()
     } catch (err) {
       setFormError((err as Error).message)
@@ -315,13 +356,49 @@ function AgentRatesBoard({
         ) : null}
       </div>
 
-      <form className="agent-form" onSubmit={onSubmit}>
+      <form className="agent-form agent-form--full" onSubmit={onSubmit}>
         <div className="field">
-          <label htmlFor="av">{t('variety')}</label>
+          <label htmlFor="af-district">{t('locationCol')}</label>
           <select
-            id="av"
+            id="af-district"
+            value={formDistrict}
+            onChange={(e) => {
+              const next = e.target.value
+              setFormDistrict(next)
+              const first = ARECA_MANDIS.find((m) => m.district === next)
+              setFormMandiId(first?.id || '')
+            }}
+            required
+          >
+            {districts.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="af-market">{t('chooseMarket')}</label>
+          <select
+            id="af-market"
+            value={formMandiId}
+            onChange={(e) => setFormMandiId(e.target.value)}
+            required
+          >
+            {marketsForDistrict.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.market}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="af-variety">{t('variety')}</label>
+          <select
+            id="af-variety"
             value={variety}
             onChange={(e) => setVariety(e.target.value as VarietyBucketKey)}
+            required
           >
             {VARIETY_BUCKETS.map((b) => (
               <option key={b.key} value={b.key}>
@@ -331,13 +408,24 @@ function AgentRatesBoard({
           </select>
         </div>
         <div className="field">
-          <label htmlFor="ar">{t('updatePurchase')}</label>
+          <label htmlFor="af-min">{t('purchaseMinAmount')}</label>
           <input
-            id="ar"
+            id="af-min"
             inputMode="numeric"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            placeholder={t('enterAmount')}
+            value={minRate}
+            onChange={(e) => setMinRate(e.target.value)}
+            placeholder={t('enterMinAmount')}
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="af-max">{t('purchaseMaxAmount')}</label>
+          <input
+            id="af-max"
+            inputMode="numeric"
+            value={maxRate}
+            onChange={(e) => setMaxRate(e.target.value)}
+            placeholder={t('enterMaxAmount')}
             required
           />
           {selectedMandiModal != null && allowedMax != null ? (
@@ -351,7 +439,7 @@ function AgentRatesBoard({
             <small className="field-hint">{t('agentNeedMarket')}</small>
           )}
         </div>
-        <div className="field">
+        <div className="field field--action">
           <label>&nbsp;</label>
           <button className="btn btn-gold" type="submit" disabled={saving}>
             {saving ? t('updating') : t('updateAmount')}
@@ -736,7 +824,7 @@ export function LocalPlacePanel({
 
       {activeReady && activePlace && resolved ? (
         <>
-          <AgentRatesBoard placeRows={resolved.marketRows} place={activePlace} />
+          <AgentRatesBoard records={records} place={activePlace} />
           <div className="variety-grid">
             {varietyGroups.map((g) => (
               <VarietyTable key={g.key} title={g.title} kannada={g.kannada} rows={g.rows} />

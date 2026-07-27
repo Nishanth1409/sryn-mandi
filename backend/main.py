@@ -638,7 +638,6 @@ async def get_market_history(
 
 class AgentQuoteIn(BaseModel):
     variety_key: str = Field(..., description="sarakku|bede|rashi|andal")
-    rate: float = Field(..., description="₹ per quintal purchase amount")
     district: str
     market: str | None = "Local agent"
     note: str | None = None
@@ -649,9 +648,31 @@ class AgentQuoteIn(BaseModel):
         None,
         description="Official mandi modal for this place+variety; used to validate agent amount",
     )
+    # Single amount (legacy) or purchase range
+    rate: float | None = Field(None, description="Single purchase ₹/quintal")
+    rate_min: float | None = Field(None, description="Purchase minimum ₹/quintal")
+    rate_max: float | None = Field(None, description="Purchase maximum ₹/quintal")
 
 
 AGENT_MAX_OVER_MARKET = 3000
+
+
+def _validate_against_market(rate: float, modal: float) -> None:
+    floor = float(modal)
+    ceiling = floor + AGENT_MAX_OVER_MARKET
+    if rate < floor:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Amount cannot be less than the mandi market rate (₹{round(floor):,}).",
+        )
+    if rate > ceiling:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Amount cannot exceed the mandi market rate by more than ₹{AGENT_MAX_OVER_MARKET:,}. "
+                f"Max allowed: ₹{round(ceiling):,}."
+            ),
+        )
 
 
 @app.get("/api/agent-quotes")
@@ -700,28 +721,41 @@ async def post_agent_quote(body: AgentQuoteIn):
             status_code=400,
             detail="Mandi market rate is required for this variety at this place before submitting.",
         )
-    floor = float(modal)
-    ceiling = floor + AGENT_MAX_OVER_MARKET
-    if body.rate < floor:
+
+    rates: list[float] = []
+    if body.rate_min is not None or body.rate_max is not None:
+        rmin = body.rate_min if body.rate_min is not None else body.rate_max
+        rmax = body.rate_max if body.rate_max is not None else body.rate_min
+        assert rmin is not None and rmax is not None
+        if rmin > rmax:
+            raise HTTPException(
+                status_code=400,
+                detail="Purchase minimum cannot be greater than purchase maximum.",
+            )
+        rates = [float(rmin)] if float(rmin) == float(rmax) else [float(rmin), float(rmax)]
+    elif body.rate is not None:
+        rates = [float(body.rate)]
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"Amount cannot be less than the mandi market rate (₹{round(floor):,}).",
+            detail="Enter purchase minimum and maximum amounts (or a single purchase amount).",
         )
-    if body.rate > ceiling:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Amount cannot exceed the mandi market rate by more than ₹{AGENT_MAX_OVER_MARKET:,}. "
-                f"Max allowed: ₹{round(ceiling):,}."
-            ),
-        )
+
+    for rate in rates:
+        _validate_against_market(rate, float(modal))
+
     try:
-        payload = body.model_dump()
-        payload.pop("market_modal", None)
-        row = agent_store.add_quote(payload)
+        base = body.model_dump()
+        base.pop("market_modal", None)
+        base.pop("rate_min", None)
+        base.pop("rate_max", None)
+        base.pop("rate", None)
+        rows = []
+        for rate in rates:
+            rows.append(agent_store.add_quote({**base, "rate": rate}))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True, "quote": row}
+    return {"ok": True, "quote": rows[0], "quotes": rows, "count": len(rows)}
 
 
 @app.on_event("startup")
