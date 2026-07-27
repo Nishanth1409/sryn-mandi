@@ -358,6 +358,17 @@ def _normalize(raw_rows: list[dict]) -> list[PriceRecord]:
         )
 
     records.sort(key=lambda r: (not r.is_shivamogga, -r.modal_price, r.market))
+
+    # Keep the board on one live trading day: prefer today, else the newest arrival day.
+    # Older market lots (e.g. 24-07 when today is 27-07) are dropped from the live board.
+    arrival_days = [_parse_date(r.arrival_date) for r in records]
+    arrival_days = [d for d in arrival_days if d]
+    if arrival_days:
+        today = date.today()
+        live_day = today if today in arrival_days else max(arrival_days)
+        live_records = [r for r in records if _parse_date(r.arrival_date) == live_day]
+        if live_records:
+            return live_records
     return records
 
 
@@ -440,7 +451,7 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
-    cache_key = f"{days}|{','.join(sorted(states))}"
+    cache_key = f"live1|{days}|{','.join(sorted(states))}"
 
     with _cache_lock:
         mem = _cache

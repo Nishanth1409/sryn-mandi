@@ -78,13 +78,35 @@ export function HeroOverlay({
   )
 }
 
-export function StatsStrip({ summary }: { summary: SummaryStats }) {
+export function StatsStrip({
+  summary,
+  updatedAt,
+}: {
+  summary: SummaryStats
+  updatedAt?: string
+}) {
   const { t } = usePrefs()
+  const liveDate = useMemo(() => {
+    if (summary.latest_date) return summary.latest_date
+    if (updatedAt) {
+      const d = new Date(updatedAt)
+      if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        return `${dd}-${mm}-${d.getFullYear()}`
+      }
+    }
+    const now = new Date()
+    const dd = String(now.getDate()).padStart(2, '0')
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    return `${dd}-${mm}-${now.getFullYear()}`
+  }, [summary.latest_date, updatedAt])
+
   const items = [
     {
       label: t('avgModal'),
       value: formatINR(summary.avg_modal),
-      hint: summary.latest_date ? t('asOf', { date: summary.latest_date }) : t('perQuintal'),
+      hint: t('asOf', { date: liveDate }),
     },
     {
       label: t('shivamogga'),

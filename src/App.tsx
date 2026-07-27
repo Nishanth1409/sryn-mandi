@@ -141,7 +141,7 @@ export default function App() {
 
         <div className="panel-stack">
           <InstallAppBanner />
-          {data ? <StatsStrip summary={data.summary} /> : null}
+          {data ? <StatsStrip summary={data.summary} updatedAt={data.updated_at} /> : null}
 
           {loading && !data ? (
             <div className="shell glass loading">{t('growingPlantation')}</div>
