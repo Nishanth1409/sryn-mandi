@@ -293,7 +293,8 @@ export default function App() {
           ) : null}
 
           <footer className="shell footer">
-            <p>{t('footer')}</p>
+            <p className="footer__copy">{t('footerCopyright', { year: new Date().getFullYear() })}</p>
+            <p className="footer__note">{t('footer')}</p>
           </footer>
         </div>
       </div>

@@ -124,7 +124,7 @@ export function HeroOverlay({
         <div className="brand-lockup">
           <img
             className="brand-logo"
-            src={theme === 'light' ? '/logo-light.png?v=1' : '/logo-dark.png?v=1'}
+            src={theme === 'light' ? '/logo-light.png?v=2' : '/logo-dark.png?v=2'}
             alt="Sryn Areca nut's"
             width={420}
             height={272}
@@ -224,31 +224,43 @@ function ChartTip({
   active,
   payload,
   label,
-  unitNote,
+  tipLabels,
   lotsLabel,
 }: {
   active?: boolean
-  payload?: { value: number; name: string; color?: string; payload?: ChartPoint }[]
+  payload?: {
+    value: number
+    name: string
+    dataKey?: string | number
+    color?: string
+    payload?: ChartPoint
+  }[]
   label?: string
-  unitNote?: string
+  tipLabels?: { avg: string; max: string; min: string }
   lotsLabel?: (n: number) => string
 }) {
   if (!active || !payload?.length) return null
   const point = payload[0]?.payload
+  const shortName = (p: { name: string; dataKey?: string | number }) => {
+    const key = String(p.dataKey ?? '')
+    if (key === 'avg') return tipLabels?.avg ?? p.name
+    if (key === 'max') return tipLabels?.max ?? p.name
+    if (key === 'min') return tipLabels?.min ?? p.name
+    return p.name
+  }
   return (
     <div className="chart-tip">
       <div className="chart-tip__date">{point?.full || label}</div>
       {payload.map((p) => (
-        <div className="chart-tip__row" key={p.name}>
+        <div className="chart-tip__row" key={String(p.dataKey ?? p.name)}>
           <i style={{ background: p.color }} />
-          <span>{p.name}</span>
+          <span>{shortName(p)}</span>
           <strong>{formatINR(p.value)}</strong>
         </div>
       ))}
-      <div className="chart-tip__foot">
-        {point?.count && lotsLabel ? `${lotsLabel(point.count)} · ` : ''}
-        {unitNote}
-      </div>
+      {point?.count && lotsLabel ? (
+        <div className="chart-tip__foot">{lotsLabel(point.count)}</div>
+      ) : null}
     </div>
   )
 }
@@ -626,10 +638,24 @@ export function TrendsPanel({
                         width={58}
                       />
                       <Tooltip
+                        allowEscapeViewBox={{ x: false, y: false }}
+                        offset={10}
+                        wrapperStyle={{
+                          outline: 'none',
+                          pointerEvents: 'none',
+                          zIndex: 8,
+                          maxWidth: '11.5rem',
+                        }}
                         content={
                           <ChartTip
-                            unitNote={t('chartUnitNote')}
-                            lotsLabel={(n) => t(n === 1 ? 'chartLotOnDay' : 'chartLotsOnDay', { n })}
+                            tipLabels={{
+                              avg: t('chartTipAvg'),
+                              max: t('chartTipMax'),
+                              min: t('chartTipMin'),
+                            }}
+                            lotsLabel={(n) =>
+                              t(n === 1 ? 'chartLotOnDay' : 'chartLotsOnDay', { n })
+                            }
                           />
                         }
                       />

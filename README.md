@@ -64,7 +64,7 @@ npm run dev
 
 UI: http://127.0.0.1:5173 · API: http://127.0.0.1:8001
 
-Optional: regenerate theme logos from `public/Dark theme.png`:
+Optional: regenerate the header logos from the artwork in `public/Dark theme.png` and `public/light theme.png`:
 
 ```bash
 python scripts/make_theme_logos.py

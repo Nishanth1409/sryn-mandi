@@ -104,6 +104,22 @@ body {
   background: var(--canopy);
 }
 
+/* The list a <select> pops open is painted by the OS, not by us. Declaring a
+   colour scheme is what keeps it on our palette instead of the default light
+   grey menu with a blue highlight. */
+select {
+  color-scheme: dark;
+}
+
+html[data-theme='light'] select {
+  color-scheme: light;
+}
+
+select option {
+  background-color: var(--canopy);
+  color: var(--ink);
+}
+
 /* One scrollbar treatment for every scroll area, in the site palette.
    Firefox only: the standard properties would otherwise win in Chrome and
    bring back native arrow buttons and square rail ends. */
@@ -370,15 +386,19 @@ html[data-theme='light'] .live {
   gap: 0.3rem;
   padding: 0.34rem 0.5rem 0.34rem 0.6rem;
   line-height: 1;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 
 .lang-field:hover {
   border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
 }
 
+/* These pills sit flush with the shell edge, so the focus ring is drawn inside
+   the pill. An outward ring would spill past the section and get clipped. */
 .lang-field:focus-within {
   outline: 2px solid var(--leaf-glow);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  border-color: var(--leaf-glow);
 }
 
 .lang-field__code {
@@ -394,11 +414,13 @@ html[data-theme='light'] .live {
   height: 100%;
   opacity: 0;
   border: 0;
+  border-radius: inherit;
   padding: 0;
   margin: 0;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pref-icon,
@@ -442,7 +464,8 @@ html[data-theme='light'] .live {
 
 .theme-btn:focus-visible {
   outline: 2px solid var(--leaf-glow);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  border-color: var(--leaf-glow);
 }
 
 .theme-btn .pref-icon {
@@ -697,11 +720,23 @@ html[data-theme='light'] .hero-copy {
   cursor: pointer;
   font-weight: 700;
   font-size: 0.92rem;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.btn:hover {
+.btn:not(:disabled):hover {
   transform: translateY(-2px);
+}
+
+/* Settling back on press reads as a physical click. */
+.btn:not(:disabled):active {
+  transform: translateY(0);
+  transition-duration: 70ms;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--leaf-glow);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
@@ -715,9 +750,10 @@ html[data-theme='light'] .hero-copy {
   color: var(--on-gold);
 }
 
-.btn-gold:hover {
+.btn-gold:not(:disabled):hover {
   background: #d9a13a;
   color: var(--on-gold);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--nut) 34%, transparent);
 }
 
 .btn-ghost {
@@ -726,6 +762,11 @@ html[data-theme='light'] .hero-copy {
   color: var(--ink);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+}
+
+.btn-ghost:not(:disabled):hover {
+  background: color-mix(in srgb, var(--leaf-glow) 14%, var(--ghost-bg));
+  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
 }
 
 /* ——— Content panels ——— */
@@ -947,6 +988,15 @@ html[data-theme='light'] .glass {
   color: var(--ink);
   background: transparent;
   font: inherit;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.date-calendar__nav button:focus-visible,
+.date-calendar__grid button:focus-visible,
+.date-calendar__months button:focus-visible {
+  outline: 2px solid var(--leaf-glow);
+  outline-offset: -2px;
 }
 
 .date-calendar__nav > button:not(.date-calendar__month-toggle) {
@@ -1030,6 +1080,12 @@ html[data-theme='light'] .glass {
 .date-calendar__grid button:not(:disabled):hover {
   background: color-mix(in srgb, var(--nut) 25%, transparent);
   transform: translateY(-1px);
+}
+
+.date-calendar__grid button:not(:disabled):active,
+.date-calendar__months button:not(:disabled):active {
+  transform: scale(0.94);
+  transition-duration: 70ms;
 }
 
 .date-calendar__grid button.is-selected {
@@ -1223,11 +1279,42 @@ html[data-theme='light'] .glass {
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 600;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chip:not(:disabled):hover {
+  background: color-mix(in srgb, var(--leaf-glow) 12%, transparent);
+  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  color: var(--ink);
+}
+
+.chip:not(:disabled):active {
+  transform: scale(0.97);
+  transition-duration: 70ms;
+}
+
+/* Chips sit inside horizontal scrollers, so the ring is drawn inside the pill —
+   an outward one would be clipped by the scroller on the first and last chip. */
+.chip:focus-visible {
+  outline: 2px solid var(--leaf-glow);
+  outline-offset: -2px;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .chip.on {
   background: var(--leaf);
   border-color: var(--leaf);
+  color: var(--chip-on-ink);
+}
+
+.chip.on:not(:disabled):hover {
+  background: color-mix(in srgb, var(--leaf-glow) 85%, var(--leaf));
+  border-color: color-mix(in srgb, var(--leaf-glow) 85%, var(--leaf));
   color: var(--chip-on-ink);
 }
 
@@ -1522,11 +1609,6 @@ html[data-theme='light'] .mandi-row.featured {
 .field input::placeholder {
   color: var(--ink-dim);
   opacity: 0.9;
-}
-
-.field option {
-  background: var(--canopy);
-  color: var(--ink);
 }
 
 .field input:focus,
@@ -1883,44 +1965,61 @@ table.rates tr.featured td {
 }
 
 .chart-tip {
-  padding: 0.6rem 0.75rem;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(10.75rem, 58vw);
+  padding: 0.32rem 0.45rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--chart-tip-bg);
   color: var(--ink);
-  font-size: 0.82rem;
-  box-shadow: var(--panel-shadow);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 .chart-tip__date {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.18rem;
   font-weight: 800;
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .chart-tip__row {
   display: grid;
-  grid-template-columns: 0.6rem 1fr auto;
+  grid-template-columns: 0.4rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.1rem 0;
+  gap: 0.2rem 0.35rem;
+  padding: 0;
+  min-width: 0;
+}
+
+.chart-tip__row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-dim);
 }
 
 .chart-tip__row i {
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
 }
 
 .chart-tip__row strong {
   font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .chart-tip__foot {
-  margin-top: 0.4rem;
-  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+  padding-top: 0.2rem;
   border-top: 1px solid var(--line);
   color: var(--ink-dim);
-  font-size: 0.74rem;
+  font-size: 0.62rem;
+  line-height: 1.25;
 }
 
 .trend-side-title {
@@ -1955,8 +2054,16 @@ table.rates tr.featured td {
 }
 
 .chart-box {
+  position: relative;
   height: clamp(200px, 32vw, 260px);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chart-box .recharts-tooltip-wrapper {
+  max-width: min(11.5rem, 62%);
 }
 
 .top-list {
@@ -2042,9 +2149,28 @@ table.rates tr.featured td {
 }
 
 .footer {
-  padding: 0.85rem 0 1.5rem;
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 0 1.65rem;
   color: var(--ink-dim);
   font-size: 0.82rem;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.footer__copy {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.footer__note {
+  margin: 0;
+  max-width: 42rem;
+  margin-inline: auto;
+  line-height: 1.45;
+  opacity: 0.88;
 }
 
 .footer strong {
@@ -2604,6 +2730,20 @@ table.rates tr.featured td {
     height: 210px;
   }
 
+  .chart-tip {
+    max-width: min(10.5rem, 58vw);
+    padding: 0.35rem 0.45rem;
+    font-size: 0.68rem;
+  }
+
+  .chart-tip__date {
+    font-size: 0.7rem;
+  }
+
+  .chart-tip__row strong {
+    font-size: 0.7rem;
+  }
+
   .variety-lots {
     display: flex;
   }
@@ -2750,7 +2890,7 @@ table.rates tr.featured td {
   }
 
   .footer {
-    padding: 0.65rem 0 1.1rem;
+    padding: 0.8rem 0 1.25rem;
   }
 
   table.rates th,
@@ -2766,5 +2906,28 @@ table.rates tr.featured td {
 
   .hero-copy h1 {
     font-size: clamp(3.2rem, 4.2vw, 4.1rem);
+  }
+}
+
+/* Colour and outline feedback is kept; only the movement is dropped. Last in
+   the file so it wins over the interaction rules above. */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .chip,
+  .lang-field,
+  .theme-btn,
+  .date-calendar__nav button,
+  .date-calendar__grid button,
+  .date-calendar__months button {
+    transition: none;
+  }
+
+  .btn:not(:disabled):hover,
+  .btn:not(:disabled):active,
+  .chip:not(:disabled):active,
+  .date-calendar__grid button:not(:disabled):hover,
+  .date-calendar__grid button:not(:disabled):active,
+  .date-calendar__months button:not(:disabled):active {
+    transform: none;
   }
 }
