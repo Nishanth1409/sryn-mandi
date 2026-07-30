@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchPrices } from './api'
 import { ArakaScene } from './components/ArakaScene'
+import { AvailableDateCalendar } from './components/AvailableDateCalendar'
+import { HistoryUnlockPanel } from './components/HistoryUnlockPanel'
 import { LocalPlacePanel } from './components/LocalPlacePanel'
 import {
   HeroOverlay,
@@ -11,12 +13,16 @@ import {
 } from './components/MarketPanels'
 import { InstallAppBanner } from './components/InstallAppBanner'
 import { usePrefs } from './i18n/PrefsContext'
-import { useDevicePlace } from './hooks/useDevicePlace'
-import { isBoardDateToday, filterToBoardDate, pickLiveBoardDate, formatBoardDate } from './components/shared'
-import type { PricesResponse } from './types'
+import { useDevicePlace, type DevicePlace } from './hooks/useDevicePlace'
+import { isBoardDateToday, filterToBoardDate, pickLiveBoardDate } from './components/shared'
+import type { PriceRecord, PricesResponse, SummaryStats } from './types'
 import './index.css'
 
 const REFRESH_MS = 5 * 60 * 1000
+// Ask for the full archive window so every saved official date stays browsable.
+const SERVE_WINDOW_DAYS = 400
+const HEAL_BASE_DELAY_MS = 10 * 1000
+const HEAL_MAX_DELAY_MS = 5 * 60 * 1000
 
 const emptyFilters: FiltersState = {
   query: '',
@@ -26,6 +32,27 @@ const emptyFilters: FiltersState = {
   focus: 'all',
 }
 
+function summarizeRecords(records: PriceRecord[], boardDate: string | null): SummaryStats {
+  const modals = records.map((record) => record.modal_price).filter((price) => price > 0)
+  const shivamogga = records
+    .filter((record) => record.is_shivamogga)
+    .map((record) => record.modal_price)
+    .filter((price) => price > 0)
+  return {
+    avg_modal: modals.length ? Math.round((modals.reduce((a, b) => a + b, 0) / modals.length) * 100) / 100 : 0,
+    highest: modals.length ? Math.max(...modals) : 0,
+    lowest: modals.length ? Math.min(...modals) : 0,
+    markets: new Set(records.map((record) => `${record.market}|${record.district}`)).size,
+    varieties: new Set(records.map((record) => record.variety)).size,
+    states: new Set(records.map((record) => record.state)).size,
+    records: records.length,
+    latest_date: boardDate,
+    shivamogga_avg: shivamogga.length
+      ? Math.round((shivamogga.reduce((a, b) => a + b, 0) / shivamogga.length) * 100) / 100
+      : null,
+  }
+}
+
 export default function App() {
   const { t } = usePrefs()
   const [data, setData] = useState<PricesResponse | null>(null)
@@ -33,10 +60,12 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [filters, setFilters] = useState<FiltersState>(emptyFilters)
-  const [scope, setScope] = useState<'karnataka' | 'india'>('india')
+  const [scope, setScope] = useState<'karnataka' | 'india'>('karnataka')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [healAttempt, setHealAttempt] = useState(0)
+  const [activePlace, setActivePlace] = useState<DevicePlace | null>(null)
   const scopeRef = useRef(scope)
   const hasDataRef = useRef(false)
-  const forcedTodayRefreshRef = useRef(false)
   scopeRef.current = scope
   const { status: geoStatus, place, message: geoMessage, locate } = useDevicePlace()
 
@@ -47,7 +76,7 @@ export default function App() {
       else setLoading(true)
       setError(null)
       const payload = await fetchPrices({
-        days: 14,
+        days: SERVE_WINDOW_DAYS,
         scope: activeScope,
         refresh,
       })
@@ -74,8 +103,8 @@ export default function App() {
       try {
         setLoading(true)
         setError(null)
-        // Stage 1: Karnataka first so boards appear quickly with real rates
-        const quick = await fetchPrices({ days: 14, scope: 'karnataka' })
+        // Karnataka keeps the full official lookback; All-India remains opt-in.
+        const quick = await fetchPrices({ days: SERVE_WINDOW_DAYS, scope: 'karnataka' })
         if (cancelled) return
         if (quick.records?.length) {
           setData(quick)
@@ -83,16 +112,6 @@ export default function App() {
           setScope('karnataka')
         }
         setLoading(false)
-
-        // Stage 2: expand to All-India — never replace good data with an empty board
-        setRefreshing(true)
-        const full = await fetchPrices({ days: 14, scope: 'india' })
-        if (cancelled) return
-        if (full.records?.length) {
-          setData(full)
-          setScope('india')
-          hasDataRef.current = true
-        }
       } catch (err) {
         if (cancelled) return
         setError((err as Error).message || 'Unable to load market prices')
@@ -113,32 +132,54 @@ export default function App() {
     }
   }, [load])
 
-  const boardDate = useMemo(() => {
+  const emptyBoard = Boolean(data ? data.records.length === 0 : error)
+
+  // Keep retrying on a widening delay until the official feeds answer again.
+  useEffect(() => {
+    if (!emptyBoard) return
+    const delay = Math.min(HEAL_BASE_DELAY_MS * 2 ** healAttempt, HEAL_MAX_DELAY_MS)
+    const id = window.setTimeout(() => {
+      setHealAttempt((attempt) => attempt + 1)
+      void load(true)
+    }, delay)
+    return () => window.clearTimeout(id)
+  }, [emptyBoard, healAttempt, load])
+
+  useEffect(() => {
+    if (!emptyBoard && healAttempt !== 0) setHealAttempt(0)
+  }, [emptyBoard, healAttempt])
+
+  const availableDates = useMemo(() => {
     if (!data) return null
-    // Force today's board whenever any lot has today's arrival date
-    if (data.records.some((r) => isBoardDateToday(r.arrival_date))) {
-      return formatBoardDate()
-    }
-    return data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records)
+    return data.available_dates?.length
+      ? data.available_dates
+      : Array.from(new Set(data.records.map((record) => record.arrival_date).filter(Boolean)))
   }, [data])
 
-  const liveRecords = useMemo(() => {
+  useEffect(() => {
+    if (!data || !availableDates?.length) {
+      setSelectedDate(null)
+      return
+    }
+    setSelectedDate((current) =>
+      current && availableDates.includes(current)
+        ? current
+        : data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records),
+    )
+  }, [availableDates, data])
+
+  const boardDate = selectedDate
+
+  const boardRecords = useMemo(() => {
     if (!data) return []
     return filterToBoardDate(data.records, boardDate)
   }, [data, boardDate])
 
-  const boardIsToday = Boolean(boardDate && isBoardDateToday(boardDate))
+  const boardIsToday = Boolean(boardRecords.length && boardDate && isBoardDateToday(boardDate))
   const staleBoardDate = boardDate && !boardIsToday ? boardDate : null
 
-  // If board is not today, hard-refresh once so newly published today's rates replace cache
-  useEffect(() => {
-    if (!data?.records?.length || forcedTodayRefreshRef.current) return
-    if (boardIsToday) return
-    forcedTodayRefreshRef.current = true
-    void load(true)
-  }, [data, boardIsToday, load])
-
   const updatedLabel = useMemo(() => {
+    if (!data?.records.length) return t('noOfficialRates')
     if (!data?.updated_at) return t('syncingAgmarknet')
     if (staleBoardDate) return t('ratesAsOfStale', { date: staleBoardDate })
     const age = data.cache_age_seconds
@@ -146,13 +187,19 @@ export default function App() {
     return t('minutesAgo', { n: Math.round(age / 60) })
   }, [data, staleBoardDate, t])
 
+  const boardSummary = useMemo<SummaryStats | null>(() => {
+    if (!data) return null
+    return summarizeRecords(boardRecords, boardDate)
+  }, [boardDate, boardRecords, data])
+
   const scrollToRates = () => {
     document.getElementById('local')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const handleFocusChange = (next: FiltersState) => {
+    const explicitlyOpenedAllIndia = next.focus === 'all' && filters.focus !== 'all'
     setFilters(next)
-    if (scope !== 'india') void load(false, 'india')
+    if (scope !== 'india' && explicitlyOpenedAllIndia) void load(false, 'india')
   }
 
   return (
@@ -162,7 +209,7 @@ export default function App() {
       <div className="app-overlay">
         <HeroOverlay
           updatedLabel={updatedLabel}
-          livePrefix={!staleBoardDate}
+          livePrefix={boardIsToday}
           onExplore={scrollToRates}
           onRefresh={() => void load(true)}
           loading={refreshing}
@@ -170,22 +217,49 @@ export default function App() {
 
         <div className="panel-stack">
           <InstallAppBanner />
-          {data ? <StatsStrip summary={data.summary} updatedAt={data.updated_at} /> : null}
+          {data?.records.length && availableDates?.length ? (
+            <AvailableDateCalendar
+              availableDates={availableDates}
+              selectedDate={boardDate}
+              onSelect={setSelectedDate}
+              archivedNotice={
+                data.feed_health?.state === 'archived' ? t('archivedRatesNotice') : null
+              }
+            />
+          ) : null}
+
+          <HistoryUnlockPanel
+            needed={Boolean(
+              (availableDates?.length ?? 0) <= 3 &&
+                (data?.feed_health?.captcha_required ||
+                  data?.feed_health?.sources?.agmarknet === 'captcha_required'),
+            )}
+            availableDateCount={availableDates?.length ?? 0}
+            onUnlocked={(prices) => {
+              setData(prices)
+              setSelectedDate(null)
+              setError(null)
+              setHealAttempt(0)
+            }}
+          />
+
+          {boardSummary ? <StatsStrip summary={boardSummary} boardDate={boardDate} /> : null}
 
           {loading && !data ? (
             <div className="shell glass loading">{t('growingPlantation')}</div>
           ) : null}
 
-          {error && !data ? (
+          {emptyBoard && !loading ? (
             <div className="shell glass error">
-              <p>{error}</p>
+              <p>{data ? t('noOfficialRates') : error}</p>
+              <p className="error__healing">{t('retryingAutomatically')}</p>
               <button className="btn btn-gold" type="button" onClick={() => void load(true)}>
                 {t('retry')}
               </button>
             </div>
           ) : null}
 
-          {data ? (
+          {data?.records.length ? (
             <>
               <LocalPlacePanel
                 records={data.records}
@@ -194,20 +268,25 @@ export default function App() {
                 message={geoMessage}
                 onRetryLocate={locate}
                 boardDate={boardDate}
-              />
-              <TrendsPanel
-                history={data.history}
-                historyByVariety={data.history_by_variety}
-                topMarkets={data.top_markets}
-                records={liveRecords}
+                availableDates={availableDates || []}
+                onSelectDate={setSelectedDate}
+                onActivePlaceChange={setActivePlace}
               />
               <RatesPanel
-                records={liveRecords}
+                records={boardRecords}
                 filters={filters}
                 onChange={handleFocusChange}
                 onRefresh={() => void load(true)}
                 loading={refreshing}
                 updatedAt={data.updated_at}
+                boardDate={boardDate}
+                availableDates={availableDates || []}
+                onSelectDate={setSelectedDate}
+              />
+              <TrendsPanel
+                allRecords={data.records}
+                boardRecords={boardRecords}
+                activePlace={activePlace}
                 boardDate={boardDate}
               />
             </>

@@ -35,7 +35,7 @@ __pycache__/
 .venv/
 venv/
 
-# Local agent quote store (runtime)
+# Runtime market cache
 backend/data/*.json
 !backend/data/.gitkeep
 

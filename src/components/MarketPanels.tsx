@@ -2,6 +2,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -11,6 +12,7 @@ import { PrefsControls } from './PrefsControls'
 import { usePrefs } from '../i18n/PrefsContext'
 import type { HistoryPoint, PriceRecord, SummaryStats, TopMarket } from '../types'
 import {
+  arrivalSortKey,
   formatCompact,
   formatINR,
   isBoardDateToday,
@@ -19,10 +21,15 @@ import {
 } from './shared'
 import { useMemo, useState } from 'react'
 import {
+  ARECA_MANDIS,
   VARIETY_BUCKETS,
   matchesVarietyBucket,
+  type MandiPoint,
   type VarietyBucketKey,
 } from '../geo/mandis'
+import type { DevicePlace } from '../hooks/useDevicePlace'
+import { filterPlaceRecords } from './LocalPlacePanel'
+import { AvailableDateCalendar } from './AvailableDateCalendar'
 
 export type FiltersState = {
   query: string
@@ -30,6 +37,70 @@ export type FiltersState = {
   district: string
   variety: string
   focus: 'all' | 'shivamogga' | 'karnataka'
+}
+
+function toIsoDate(official: string): string | null {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(official)
+  if (!match) return null
+  return `${match[3]}-${match[2]}-${match[1]}`
+}
+
+type ChartPoint = HistoryPoint & { label: string; full: string }
+
+type HistoryScope =
+  | { kind: 'mandi'; mandi: MandiPoint; label: string }
+  | { kind: 'district'; district: string; label: string }
+
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function filterDistrictRecords(records: PriceRecord[], district: string): PriceRecord[] {
+  const needle = normalizeName(district)
+  return records.filter((record) => {
+    const value = normalizeName(record.district)
+    if (value.includes(needle) || needle.includes(value)) return true
+    return (
+      district === 'Shivamogga' && (value.includes('shimoga') || Boolean(record.is_shivamogga))
+    )
+  })
+}
+
+function scopeRecords(records: PriceRecord[], scope: HistoryScope | null): PriceRecord[] {
+  if (!scope) return []
+  return scope.kind === 'mandi'
+    ? filterPlaceRecords(records, scope.mandi)
+    : filterDistrictRecords(records, scope.district)
+}
+
+/**
+ * One point per day: the average of that day's modal prices, plus the real
+ * lowest/highest prices officially posted on the same day.
+ */
+function buildHistory(records: PriceRecord[]): HistoryPoint[] {
+  const buckets = new Map<string, { modal: number[]; lows: number[]; highs: number[] }>()
+  for (const record of records) {
+    if (!record.modal_price || !record.arrival_date) continue
+    const iso = toIsoDate(record.arrival_date)
+    if (!iso) continue
+    const entry = buckets.get(iso) || { modal: [], lows: [], highs: [] }
+    entry.modal.push(record.modal_price)
+    if (record.min_price > 0) entry.lows.push(record.min_price)
+    if (record.max_price > 0) entry.highs.push(record.max_price)
+    buckets.set(iso, entry)
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, values]) => ({
+      date,
+      avg:
+        Math.round(
+          (values.modal.reduce((sum, value) => sum + value, 0) / values.modal.length) * 100,
+        ) / 100,
+      min: Math.min(...(values.lows.length ? values.lows : values.modal)),
+      max: Math.max(...(values.highs.length ? values.highs : values.modal)),
+      count: values.modal.length,
+    }))
 }
 
 export function HeroOverlay({
@@ -45,7 +116,7 @@ export function HeroOverlay({
   updatedLabel: string
   livePrefix?: boolean
 }) {
-  const { t } = usePrefs()
+  const { t, theme } = usePrefs()
 
   return (
     <header className="hero shell">
@@ -53,7 +124,7 @@ export function HeroOverlay({
         <div className="brand-lockup">
           <img
             className="brand-logo"
-            src="/SRYN.png?v=2"
+            src={theme === 'light' ? '/logo-light.png?v=1' : '/logo-dark.png?v=1'}
             alt="Sryn Areca nut's"
             width={420}
             height={272}
@@ -99,20 +170,19 @@ export function HeroOverlay({
 
 export function StatsStrip({
   summary,
-  updatedAt,
+  boardDate,
 }: {
   summary: SummaryStats
-  updatedAt?: string
+  boardDate?: string | null
 }) {
   const { t } = usePrefs()
-  const liveDate = useMemo(
-    () => resolveBoardDate(summary.latest_date, updatedAt),
-    [summary.latest_date, updatedAt],
-  )
+  const liveDate = boardDate || summary.latest_date
   const todayBoard = isBoardDateToday(liveDate)
-  const dateHint = todayBoard
-    ? t('asOf', { date: liveDate })
-    : t('ratesAsOfStale', { date: liveDate })
+  const dateHint = liveDate
+    ? todayBoard
+      ? t('asOf', { date: liveDate })
+      : t('ratesAsOf', { date: liveDate })
+    : t('noOfficialRates')
 
   const items = [
     {
@@ -154,53 +224,128 @@ function ChartTip({
   active,
   payload,
   label,
+  unitNote,
+  lotsLabel,
 }: {
   active?: boolean
-  payload?: { value: number; name: string }[]
+  payload?: { value: number; name: string; color?: string; payload?: ChartPoint }[]
   label?: string
+  unitNote?: string
+  lotsLabel?: (n: number) => string
 }) {
   if (!active || !payload?.length) return null
+  const point = payload[0]?.payload
   return (
-    <div
-      style={{
-        background: 'var(--chart-tip-bg)',
-        border: '1px solid var(--line)',
-        color: 'var(--ink)',
-        padding: '0.6rem 0.8rem',
-        borderRadius: 12,
-        fontSize: 13,
-      }}
-    >
-      <div style={{ opacity: 0.7, marginBottom: 4 }}>{label}</div>
+    <div className="chart-tip">
+      <div className="chart-tip__date">{point?.full || label}</div>
       {payload.map((p) => (
-        <div key={p.name}>
-          {p.name}: <strong>{formatINR(p.value)}</strong>
+        <div className="chart-tip__row" key={p.name}>
+          <i style={{ background: p.color }} />
+          <span>{p.name}</span>
+          <strong>{formatINR(p.value)}</strong>
         </div>
       ))}
+      <div className="chart-tip__foot">
+        {point?.count && lotsLabel ? `${lotsLabel(point.count)} · ` : ''}
+        {unitNote}
+      </div>
     </div>
   )
 }
 
 export function TrendsPanel({
-  history,
-  historyByVariety,
-  topMarkets,
-  records,
+  allRecords,
+  boardRecords,
+  activePlace,
+  boardDate,
 }: {
-  history: HistoryPoint[]
-  historyByVariety?: Record<string, HistoryPoint[]>
-  topMarkets: TopMarket[]
-  records?: PriceRecord[]
+  allRecords: PriceRecord[]
+  boardRecords: PriceRecord[]
+  activePlace: DevicePlace | null
+  boardDate?: string | null
 }) {
-  const { t } = usePrefs()
-  const byVariety = historyByVariety || {}
+  const { t, locale } = usePrefs()
+  const localeTag = locale === 'kn' ? 'kn-IN' : locale === 'hi' ? 'hi-IN' : 'en-IN'
+
+  const [locationMode, setLocationMode] = useState<'follow' | 'manual'>('follow')
+  const [historyDistrict, setHistoryDistrict] = useState('')
+  const [historyMandiId, setHistoryMandiId] = useState('')
+
+  const districts = useMemo(
+    () => Array.from(new Set(ARECA_MANDIS.map((mandi) => mandi.district))).sort(),
+    [],
+  )
+  const historyMarkets = useMemo(
+    () =>
+      ARECA_MANDIS.filter((mandi) => !historyDistrict || mandi.district === historyDistrict).sort(
+        (a, b) => a.market.localeCompare(b.market),
+      ),
+    [historyDistrict],
+  )
+
+  const scope = useMemo<HistoryScope | null>(() => {
+    if (locationMode === 'follow') {
+      if (!activePlace) return null
+      return {
+        kind: 'mandi',
+        mandi: activePlace.mandi,
+        label: `${activePlace.mandi.market}, ${activePlace.mandi.district}`,
+      }
+    }
+    const mandi = ARECA_MANDIS.find((item) => item.id === historyMandiId)
+    if (mandi) {
+      return { kind: 'mandi', mandi, label: `${mandi.market}, ${mandi.district}` }
+    }
+    if (historyDistrict) {
+      return {
+        kind: 'district',
+        district: historyDistrict,
+        label: `${t('historyAllMarkets')} · ${historyDistrict}`,
+      }
+    }
+    return null
+  }, [activePlace, historyDistrict, historyMandiId, locationMode, t])
+
+  const placeRecords = useMemo(() => scopeRecords(allRecords, scope), [allRecords, scope])
+
+  const historyByVariety = useMemo(() => {
+    const map: Record<string, HistoryPoint[]> = {}
+    for (const bucket of VARIETY_BUCKETS) {
+      const rows = placeRecords.filter((record) =>
+        matchesVarietyBucket(record.variety, bucket.match),
+      )
+      map[bucket.key] = buildHistory(rows)
+    }
+    return map
+  }, [placeRecords])
+
+  const history = useMemo(() => buildHistory(placeRecords), [placeRecords])
+
+  const boardPlaceRecords = useMemo(() => scopeRecords(boardRecords, scope), [boardRecords, scope])
+
+  const topMarkets = useMemo<TopMarket[]>(() => {
+    return [...boardPlaceRecords]
+      .filter((record) => record.modal_price > 0)
+      .sort((a, b) => b.modal_price - a.modal_price)
+      .slice(0, 8)
+      .map((record) => ({
+        market: record.market,
+        district: record.district,
+        state: record.state,
+        variety: record.variety,
+        modal_price: record.modal_price,
+        change_pct: record.change_pct,
+        is_shivamogga: record.is_shivamogga,
+        arrival_date: record.arrival_date,
+      }))
+  }, [boardPlaceRecords])
 
   const defaultVariety = useMemo((): VarietyBucketKey | 'all' => {
-    for (const b of VARIETY_BUCKETS) {
-      if ((byVariety[b.key] || []).length > 0) return b.key
+    for (const bucket of VARIETY_BUCKETS) {
+      if ((historyByVariety[bucket.key] || []).length > 0) return bucket.key
     }
     return 'rashi'
-  }, [byVariety])
+  }, [historyByVariety])
 
   const [varietyKey, setVarietyKey] = useState<VarietyBucketKey | 'all' | null>(null)
   const activeVariety = varietyKey ?? defaultVariety
@@ -210,15 +355,57 @@ export function TrendsPanel({
 
   const series = useMemo(() => {
     if (activeVariety === 'all') return history
-    return byVariety[activeVariety] || []
-  }, [activeVariety, history, byVariety])
+    return historyByVariety[activeVariety] || []
+  }, [activeVariety, history, historyByVariety])
 
-  const chartData = series.map((h) => {
-    const iso = h.date.slice(0, 10)
-    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    const label = m ? `${m[3]}-${m[2]}` : h.date.slice(5)
-    return { ...h, label }
-  })
+  const [rangeDays, setRangeDays] = useState<number>(30)
+
+  const visibleSeries = useMemo(() => {
+    if (!series.length || rangeDays === 0) return series
+    const last = new Date(series[series.length - 1].date.slice(0, 10))
+    if (Number.isNaN(last.getTime())) return series
+    const from = new Date(last)
+    from.setDate(from.getDate() - (rangeDays - 1))
+    const fromIso = from.toISOString().slice(0, 10)
+    return series.filter((point) => point.date.slice(0, 10) >= fromIso)
+  }, [rangeDays, series])
+
+  const chartData = useMemo<ChartPoint[]>(
+    () =>
+      visibleSeries.map((point) => {
+        const day = new Date(point.date.slice(0, 10))
+        const valid = !Number.isNaN(day.getTime())
+        return {
+          ...point,
+          label: valid
+            ? new Intl.DateTimeFormat(localeTag, { day: 'numeric', month: 'short' }).format(day)
+            : point.date,
+          full: valid
+            ? new Intl.DateTimeFormat(localeTag, {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }).format(day)
+            : point.date,
+        }
+      }),
+    [localeTag, visibleSeries],
+  )
+
+  const selectedDayLabel = useMemo(() => {
+    const iso = boardDate ? toIsoDate(boardDate) : null
+    if (!iso) return null
+    return chartData.find((point) => point.date.slice(0, 10) === iso)?.label ?? null
+  }, [boardDate, chartData])
+
+  const latestPoint = chartData[chartData.length - 1] ?? null
+  const previousPoint = chartData[chartData.length - 2] ?? null
+  const dayChange =
+    latestPoint && previousPoint ? Math.round(latestPoint.avg - previousPoint.avg) : null
+  const dayChangePct =
+    dayChange != null && previousPoint && previousPoint.avg
+      ? (dayChange / previousPoint.avg) * 100
+      : null
 
   const leaders = useMemo(() => {
     if (activeVariety === 'all' || !selectedBucket) return topMarkets
@@ -226,9 +413,21 @@ export function TrendsPanel({
       matchesVarietyBucket(m.variety, selectedBucket.match),
     )
     if (fromTop.length) return fromTop.slice(0, 8)
-    if (!records?.length) return []
-    return [...records]
-      .filter((r) => matchesVarietyBucket(r.variety, selectedBucket.match) && r.modal_price > 0)
+
+    const varietyRows = placeRecords.filter(
+      (record) =>
+        matchesVarietyBucket(record.variety, selectedBucket.match) && record.modal_price > 0,
+    )
+    if (!varietyRows.length) return []
+    // Nothing for this grade on the chosen date — fall back to its own latest
+    // official day, and every row still carries the date it came from.
+    const latestDay = varietyRows.reduce(
+      (best, row) =>
+        arrivalSortKey(row.arrival_date) > arrivalSortKey(best) ? row.arrival_date : best,
+      varietyRows[0].arrival_date,
+    )
+    return varietyRows
+      .filter((row) => row.arrival_date === latestDay)
       .sort((a, b) => b.modal_price - a.modal_price)
       .slice(0, 8)
       .map((r) => ({
@@ -241,7 +440,7 @@ export function TrendsPanel({
         is_shivamogga: r.is_shivamogga,
         arrival_date: r.arrival_date,
       }))
-  }, [activeVariety, selectedBucket, topMarkets, records])
+  }, [activeVariety, selectedBucket, topMarkets, placeRecords])
 
   const varietyLabel = selectedBucket
     ? `${selectedBucket.title} (${selectedBucket.kannada})`
@@ -252,145 +451,291 @@ export function TrendsPanel({
       <div className="section-head">
         <div>
           <h2>{t('pulseLeaders')}</h2>
-          <p>{t('pulseLeadersBody')}</p>
+          <p>
+            {scope
+              ? t('pulseLeadersPlaceBody', { place: scope.label })
+              : t('pulseLeadersNeedPlace')}
+          </p>
         </div>
       </div>
 
-      <div className="picker-block trend-variety-picker">
-        <label className="picker-label">{t('pickChartVariety')}</label>
-        <div className="chip-scroll" role="listbox" aria-label={t('pickChartVariety')}>
+      <div className="picker-block">
+        <label className="picker-label">{t('historyLocation')}</label>
+        <div className="place-mode-row">
           <button
             type="button"
-            className={`chip ${activeVariety === 'all' ? 'on' : ''}`}
-            onClick={() => setVarietyKey('all')}
+            className={`chip ${locationMode === 'follow' ? 'on' : ''}`}
+            onClick={() => setLocationMode('follow')}
+            disabled={!activePlace}
           >
-            {t('chartAllGrades')}
+            {t('historyFollowPlace')}
           </button>
-          {VARIETY_BUCKETS.map((b) => {
-            const n = (byVariety[b.key] || []).length
-            return (
-              <button
-                key={b.key}
-                type="button"
-                className={`chip ${activeVariety === b.key ? 'on' : ''}`}
-                onClick={() => setVarietyKey(b.key)}
-                disabled={n === 0}
-              >
-                {b.title}
-                <em>{b.kannada}</em>
-                {n > 0 ? <em>{n}d</em> : null}
-              </button>
-            )
-          })}
+          <button
+            type="button"
+            className={`chip ${locationMode === 'manual' ? 'on' : ''}`}
+            onClick={() => {
+              if (!historyDistrict && activePlace) {
+                setHistoryDistrict(activePlace.mandi.district)
+                setHistoryMandiId(activePlace.mandi.id)
+              }
+              setLocationMode('manual')
+            }}
+          >
+            {t('historyPickLocation')}
+          </button>
         </div>
+
+        {locationMode === 'manual' ? (
+          <div className="filters filters--compact">
+            <div className="field">
+              <label htmlFor="hd">{t('chooseDistrict')}</label>
+              <select
+                id="hd"
+                value={historyDistrict}
+                onChange={(event) => {
+                  setHistoryDistrict(event.target.value)
+                  setHistoryMandiId('')
+                }}
+              >
+                <option value="">{t('chooseDistrict')}</option>
+                {districts.map((district) => (
+                  <option key={district}>{district}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="hm">{t('chooseMarket')}</label>
+              <select
+                id="hm"
+                value={historyMandiId}
+                disabled={!historyDistrict}
+                onChange={(event) => setHistoryMandiId(event.target.value)}
+              >
+                <option value="">{t('historyAllMarkets')}</option>
+                {historyMarkets.map((mandi) => (
+                  <option key={mandi.id} value={mandi.id}>
+                    {mandi.market}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <div className="trend-grid">
-        <div>
-          <div className="trend-chart-caption">
-            <strong>{varietyLabel}</strong>
-            <span>
-              {chartData.length
-                ? `${formatINR(chartData[chartData.length - 1]?.avg ?? 0)} · ${chartData[chartData.length - 1]?.label || ''}`
-                : t('noVarietyHistory')}
-            </span>
+      {!scope ? (
+        <div className="empty">
+          {locationMode === 'manual' ? t('historyNeedLocation') : t('pulseLeadersNeedPlace')}
+        </div>
+      ) : (
+        <>
+          <div className="picker-block trend-variety-picker">
+            <label className="picker-label">{t('pickChartVariety')}</label>
+            <div className="chip-scroll" role="listbox" aria-label={t('pickChartVariety')}>
+              <button
+                type="button"
+                className={`chip ${activeVariety === 'all' ? 'on' : ''}`}
+                onClick={() => setVarietyKey('all')}
+              >
+                {t('chartAllGrades')}
+              </button>
+              {VARIETY_BUCKETS.map((b) => {
+                const n = (historyByVariety[b.key] || []).length
+                return (
+                  <button
+                    key={b.key}
+                    type="button"
+                    className={`chip ${activeVariety === b.key ? 'on' : ''}`}
+                    onClick={() => setVarietyKey(b.key)}
+                    disabled={n === 0}
+                  >
+                    {b.title}
+                    <em>{b.kannada}</em>
+                    {n > 0 ? <em>{t('daysCount', { n })}</em> : null}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <div className="chart-box">
-            {chartData.length === 0 ? (
-              <div className="empty">
-                {activeVariety === 'all' ? t('waitingHistory') : t('noVarietyHistory')}
+
+          <div className="picker-block">
+            <label className="picker-label">{t('chartRange')}</label>
+            <div className="place-mode-row">
+              {(
+                [
+                  [30, 'range1m'],
+                  [90, 'range3m'],
+                  [0, 'rangeAll'],
+                ] as const
+              ).map(([days, labelKey]) => (
+                <button
+                  key={labelKey}
+                  type="button"
+                  className={`chip ${rangeDays === days ? 'on' : ''}`}
+                  onClick={() => setRangeDays(days)}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="trend-grid">
+            <div>
+              <div className="trend-chart-caption">
+                <strong>{varietyLabel}</strong>
+                {latestPoint ? (
+                  <span className="trend-chart-caption__latest">
+                    <label>{t('chartLatestLabel')}</label>
+                    <b>{formatINR(latestPoint.avg)}</b>
+                    <span>{latestPoint.full}</span>
+                    <TrendDelta change={dayChange} changePct={dayChangePct} />
+                  </span>
+                ) : (
+                  <span>{t('noVarietyHistory')}</span>
+                )}
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gAvg" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3da873" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#3da873" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: 'var(--chart-tick)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={(v) => formatCompact(v)}
-                    tick={{ fontSize: 11, fill: 'var(--chart-tick)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={52}
-                  />
-                  <Tooltip content={<ChartTip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="avg"
-                    name={t('chartAvg')}
-                    stroke="#3da873"
-                    strokeWidth={2.4}
-                    fill="url(#gAvg)"
-                    animationDuration={700}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="max"
-                    name={t('chartMax')}
-                    stroke="#e8c56a"
-                    strokeWidth={1.4}
-                    strokeDasharray="4 4"
-                    fill="transparent"
-                    animationDuration={900}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="min"
-                    name={t('chartMin')}
-                    stroke="#8aa4b8"
-                    strokeWidth={1.2}
-                    strokeDasharray="3 3"
-                    fill="transparent"
-                    animationDuration={900}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+              <p className="trend-chart-help">{t('chartHelp')}</p>
+              <div className="chart-box">
+                {chartData.length === 0 ? (
+                  <div className="empty">
+                    {activeVariety === 'all' ? t('waitingHistory') : t('noVarietyHistory')}
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gAvg" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3da873" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#3da873" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: 'var(--chart-tick)' }}
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={24}
+                      />
+                      <YAxis
+                        tickFormatter={(v) => formatCompact(v)}
+                        tick={{ fontSize: 11, fill: 'var(--chart-tick)' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={58}
+                      />
+                      <Tooltip
+                        content={
+                          <ChartTip
+                            unitNote={t('chartUnitNote')}
+                            lotsLabel={(n) => t(n === 1 ? 'chartLotOnDay' : 'chartLotsOnDay', { n })}
+                          />
+                        }
+                      />
+                      {selectedDayLabel ? (
+                        <ReferenceLine
+                          x={selectedDayLabel}
+                          stroke="var(--nut)"
+                          strokeDasharray="2 4"
+                          label={{
+                            value: t('chartSelectedDay'),
+                            position: 'insideTopRight',
+                            fill: 'var(--nut-soft)',
+                            fontSize: 11,
+                          }}
+                        />
+                      ) : null}
+                      <Area
+                        type="monotone"
+                        dataKey="avg"
+                        name={t('chartAvg')}
+                        stroke="#3da873"
+                        strokeWidth={2.4}
+                        fill="url(#gAvg)"
+                        animationDuration={700}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="max"
+                        name={t('chartMax')}
+                        stroke="#e8c56a"
+                        strokeWidth={1.4}
+                        strokeDasharray="4 4"
+                        fill="transparent"
+                        animationDuration={900}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="min"
+                        name={t('chartMin')}
+                        stroke="#8aa4b8"
+                        strokeWidth={1.2}
+                        strokeDasharray="3 3"
+                        fill="transparent"
+                        animationDuration={900}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              {chartData.length ? (
+                <>
+                  <ul className="chart-legend">
+                    <li>
+                      <i className="chart-legend__line chart-legend__line--avg" />
+                      {t('chartAvg')}
+                    </li>
+                    <li>
+                      <i className="chart-legend__line chart-legend__line--max" />
+                      {t('chartMax')}
+                    </li>
+                    <li>
+                      <i className="chart-legend__line chart-legend__line--min" />
+                      {t('chartMin')}
+                    </li>
+                  </ul>
+                  <p className="chart-foot">
+                    {t('chartUnitNote')} · {t('chartDaysShown', { n: chartData.length })}
+                  </p>
+                </>
+              ) : null}
+            </div>
+            <div>
+              <h3 className="trend-side-title">
+                {selectedBucket
+                  ? t('topForVariety', { variety: selectedBucket.title })
+                  : t('topAllMarkets')}
+              </h3>
+              <ol className="top-list">
+                {leaders.length === 0 ? (
+                  <li className="empty-inline">{t('noRatesOnDate')}</li>
+                ) : (
+                  leaders.map((m, i) => (
+                    <li key={`${m.market}-${m.variety}-${i}`}>
+                      <span className="rank">{i + 1}</span>
+                      <div className="market">
+                        <strong>
+                          {m.market}
+                          {m.is_shivamogga ? <span className="tag">{t('shivamogga')}</span> : null}
+                        </strong>
+                        <small>
+                          {m.district} · {m.variety}
+                          {m.arrival_date ? ` · ${m.arrival_date}` : ''}
+                        </small>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div className="num">{formatINR(m.modal_price)}</div>
+                        <TrendDelta change={m.change_pct} changePct={m.change_pct} />
+                      </div>
+                    </li>
+                  ))
+                )}
+              </ol>
+            </div>
           </div>
-        </div>
-        <div>
-          <h3 className="trend-side-title">
-            {selectedBucket
-              ? t('topForVariety', { variety: selectedBucket.title })
-              : t('topAllMarkets')}
-          </h3>
-          <ol className="top-list">
-            {leaders.length === 0 ? (
-              <li className="empty-inline">{t('noVarietyHistory')}</li>
-            ) : (
-              leaders.map((m, i) => (
-                <li key={`${m.market}-${m.variety}-${i}`}>
-                  <span className="rank">{i + 1}</span>
-                  <div className="market">
-                    <strong>
-                      {m.market}
-                      {m.is_shivamogga ? <span className="tag">{t('shivamogga')}</span> : null}
-                    </strong>
-                    <small>
-                      {m.district} · {m.variety}
-                      {m.arrival_date ? ` · ${m.arrival_date}` : ''}
-                    </small>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="num">{formatINR(m.modal_price)}</div>
-                    <TrendDelta change={m.change_pct} changePct={m.change_pct} />
-                  </div>
-                </li>
-              ))
-            )}
-          </ol>
-        </div>
-      </div>
+        </>
+      )}
     </section>
   )
 }
@@ -403,6 +748,8 @@ export function RatesPanel({
   loading,
   updatedAt,
   boardDate,
+  availableDates,
+  onSelectDate,
 }: {
   records: PriceRecord[]
   filters: FiltersState
@@ -411,6 +758,8 @@ export function RatesPanel({
   loading?: boolean
   updatedAt: string
   boardDate?: string | null
+  availableDates?: string[]
+  onSelectDate?: (date: string) => void
 }) {
   const { t, locale } = usePrefs()
 
@@ -514,6 +863,16 @@ export function RatesPanel({
         </strong>
         {!todayBoard ? <span>{t('ratesAsOfStale', { date: tradingDate })}</span> : null}
       </div>
+
+      {availableDates?.length && onSelectDate ? (
+        <AvailableDateCalendar
+          compact
+          label={t('mandiRateDate')}
+          availableDates={availableDates}
+          selectedDate={boardDate || tradingDate || null}
+          onSelect={onSelectDate}
+        />
+      ) : null}
 
       <div className="status">
         <span>{t('compactLots', { n: filtered.length })}</span>

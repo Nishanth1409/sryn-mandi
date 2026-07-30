@@ -49,6 +49,50 @@ export interface TopMarket {
   arrival_date: string
 }
 
+export interface FeedHealth {
+  state: 'live' | 'archived' | 'unavailable'
+  consecutive_failures: number
+  last_error: string | null
+  last_success_at: string | null
+  sources: Record<string, string>
+  captcha_required?: boolean
+  agmarknet_ticket?: {
+    active: boolean
+    reason?: string
+    remaining_calls?: number
+    expires_at_iso?: string
+  }
+  archive: {
+    rows: number
+    dates: number
+    earliest_date: string | null
+    latest_date: string | null
+  }
+}
+
+export interface AgmarknetCaptcha {
+  captcha_key: string
+  captcha_image: string
+  image_type: string
+  image_data_url: string
+  expires_at: string
+  generated_at?: string
+}
+
+export interface AgmarknetUnlockResponse {
+  ok: boolean
+  added_rows: number
+  fetched_rows: number
+  total_count: number
+  pages_fetched: number
+  from_date: string
+  to_date: string
+  states: string[]
+  available_dates: string[]
+  date_count: number
+  prices: PricesResponse
+}
+
 export interface PricesResponse {
   updated_at: string
   source: string
@@ -56,7 +100,9 @@ export interface PricesResponse {
   summary: SummaryStats
   records: PriceRecord[]
   board_date?: string | null
+  available_dates: string[]
   history: HistoryPoint[]
   history_by_variety?: Record<string, HistoryPoint[]>
   top_markets: TopMarket[]
+  feed_health?: FeedHealth
 }

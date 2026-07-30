@@ -58,25 +58,25 @@ html[data-theme='light'] {
   --mist: #3d5a48;
   --ink: #0f1f17;
   --ink-dim: rgba(15, 31, 23, 0.72);
-  --panel: rgba(255, 255, 255, 0.92);
-  --line: rgba(15, 31, 23, 0.14);
+  --panel: rgba(255, 255, 255, 0.62);
+  --line: rgba(15, 31, 23, 0.12);
   --up: #0b7a48;
   --down: #b83a28;
   --chart-tick: rgba(15, 31, 23, 0.58);
   --chart-grid: rgba(15, 31, 23, 0.12);
   --chart-tip-bg: #ffffff;
-  --surface-soft: rgba(15, 31, 23, 0.04);
-  --control-bg: #ffffff;
-  --ghost-bg: rgba(255, 255, 255, 0.78);
+  --surface-soft: rgba(255, 255, 255, 0.45);
+  --control-bg: rgba(255, 255, 255, 0.72);
+  --ghost-bg: rgba(255, 255, 255, 0.52);
   --chip-on-ink: #f5fff9;
   --on-gold: #1a1205;
-  --panel-shadow: 0 16px 40px rgba(15, 31, 23, 0.1);
-  --vignette-side: rgba(232, 242, 235, 0.94);
-  --vignette-mid: rgba(232, 242, 235, 0.7);
-  --vignette-clear: rgba(232, 242, 235, 0.18);
-  --vignette-edge: rgba(232, 242, 235, 0.4);
-  --vignette-top: rgba(232, 242, 235, 0.5);
-  --vignette-bottom: rgba(232, 242, 235, 0.97);
+  --panel-shadow: 0 18px 44px rgba(15, 31, 23, 0.13), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  --vignette-side: rgba(232, 242, 235, 0.86);
+  --vignette-mid: rgba(232, 242, 235, 0.56);
+  --vignette-clear: rgba(232, 242, 235, 0.1);
+  --vignette-edge: rgba(232, 242, 235, 0.28);
+  --vignette-top: rgba(232, 242, 235, 0.42);
+  --vignette-bottom: rgba(232, 242, 235, 0.9);
   --table-surface: #ffffff;
   --table-header: #f3f7f4;
   --table-sticky: #ffffff;
@@ -102,6 +102,75 @@ body,
 body {
   overflow-x: hidden;
   background: var(--canopy);
+}
+
+/* One scrollbar treatment for every scroll area, in the site palette.
+   Firefox only: the standard properties would otherwise win in Chrome and
+   bring back native arrow buttons and square rail ends. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--leaf-glow) 70%, transparent)
+      color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+/* Arrow buttons square off the ends of the rail — drop them. */
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: 999px;
+}
+
+/* Keep the rail clear of the panel's rounded corners. */
+::-webkit-scrollbar-track:horizontal {
+  margin-inline: 0.85rem;
+}
+
+::-webkit-scrollbar-track:vertical {
+  margin-block: 0.85rem;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--leaf-glow), var(--leaf));
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, var(--nut-soft), var(--nut));
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The page itself never shows a scrollbar — only the rails inside sections do.
+   Wheel, touch and keyboard scrolling keep working. */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 button,
@@ -153,6 +222,8 @@ a {
 
 html[data-theme='light'] .scene-vignette {
   background:
+    radial-gradient(ellipse 70% 55% at 78% 42%, rgba(31, 138, 82, 0.14), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 82% 68%, rgba(196, 132, 29, 0.1), transparent 50%),
     linear-gradient(
       90deg,
       var(--vignette-side) 0%,
@@ -269,50 +340,114 @@ html[data-theme='light'] .scene-vignette {
   gap: 0.4rem;
 }
 
-.prefs-select,
+.lang-field,
 .theme-btn {
   border: 1px solid var(--line);
   background: var(--ghost-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-radius: 999px;
-  padding: 0.35rem 0.7rem;
   font-size: clamp(0.72rem, 1.5vw, 0.8rem);
   color: var(--ink);
   cursor: pointer;
 }
 
-html[data-theme='light'] .prefs-select,
+html[data-theme='light'] .lang-field,
 html[data-theme='light'] .theme-btn,
 html[data-theme='light'] .live {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.8);
   color: var(--ink);
+  box-shadow: 0 6px 18px rgba(15, 31, 23, 0.08);
 }
 
-.theme-toggle {
+/* The native picker stays — it is the best control on a phone — but it sits
+   invisibly over a pill that only shows the globe and the short code. */
+.lang-field {
+  position: relative;
   display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--ghost-bg);
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.34rem 0.5rem 0.34rem 0.6rem;
+  line-height: 1;
 }
 
-html[data-theme='light'] .theme-toggle {
-  background: rgba(255, 255, 255, 0.7);
+.lang-field:hover {
+  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
 }
 
-.theme-toggle .theme-btn {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+.lang-field:focus-within {
+  outline: 2px solid var(--leaf-glow);
+  outline-offset: 2px;
 }
 
-.theme-btn.on {
-  background: rgba(196, 132, 29, 0.28);
-  color: var(--ink);
+.lang-field__code {
   font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lang-field__select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pref-icon,
+.pref-chevron {
+  width: 1.2em;
+  height: 1.2em;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pref-chevron {
+  width: 0.85em;
+  height: 0.85em;
+  opacity: 0.7;
+}
+
+.pref-icon--moon {
+  fill: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+/* One round button: shows moon in dark, sun in light. Tap flips the theme. */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  color: var(--ink);
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.theme-btn:hover {
+  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  color: var(--nut-soft);
+}
+
+.theme-btn:focus-visible {
+  outline: 2px solid var(--leaf-glow);
+  outline-offset: 2px;
+}
+
+.theme-btn .pref-icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .visually-hidden {
@@ -352,6 +487,10 @@ html[data-theme='light'] .theme-toggle {
   border-radius: 0;
   mix-blend-mode: normal;
   filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35));
+}
+
+html[data-theme='light'] .brand-logo {
+  filter: drop-shadow(0 4px 14px rgba(15, 31, 23, 0.18));
 }
 
 .brand-text {
@@ -425,8 +564,13 @@ html[data-theme='light'] .theme-toggle {
 }
 
 html[data-theme='light'] .hero-copy {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.74));
-  box-shadow: 0 16px 40px rgba(18, 36, 27, 0.12);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.48));
+  border-color: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7) brightness(1.03);
+  backdrop-filter: blur(20px) saturate(1.7) brightness(1.03);
+  box-shadow:
+    0 16px 40px rgba(18, 36, 27, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
 .hero-copy h1 {
@@ -602,14 +746,25 @@ html[data-theme='light'] .hero-copy {
   box-shadow: var(--panel-shadow);
 }
 
+/* Light glass needs more saturation and a lit top edge, otherwise the frost
+   reads as flat white paper. */
+html[data-theme='light'] .glass {
+  background: linear-gradient(158deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
+  border-color: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(26px) saturate(1.75) brightness(1.03);
+  backdrop-filter: blur(26px) saturate(1.75) brightness(1.03);
+  box-shadow:
+    0 18px 44px rgba(15, 31, 23, 0.13),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 0 0 1px rgba(15, 31, 23, 0.05);
+}
+
 .variety-card.glass,
-.agent-board.glass,
 .local-grade-strip.glass {
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .variety-card.glass:hover,
-.agent-board.glass:hover,
 .local-grade-strip.glass:hover {
   border-color: color-mix(in srgb, var(--leaf-glow) 28%, var(--line));
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.32);
@@ -648,6 +803,339 @@ html[data-theme='light'] .hero-copy {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-stack);
+}
+
+.date-browser {
+  display: grid;
+  gap: 0.9rem;
+  padding: var(--space-panel-y) var(--space-panel-x);
+}
+
+.date-browser__heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.date-browser__heading span {
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+}
+
+.date-picker {
+  position: relative;
+  transition: background 220ms ease, border-color 220ms ease;
+}
+
+.date-picker--compact {
+  margin: 0.35rem 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+}
+
+.date-picker__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.date-picker__summary label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.date-picker__summary strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.date-picker__summary span {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+}
+
+.date-calendar {
+  width: min(100%, 19.5rem);
+  padding: 0.6rem 0.65rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+}
+
+/* The calendar stays in the document flow and the section grows around it,
+   so it can never overlap or fall behind neighbouring panels. */
+.date-calendar__collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-0.35rem);
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  margin-top: 0;
+}
+
+.date-calendar__collapse.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: none;
+  margin-top: 0.75rem;
+}
+
+.date-calendar__collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .date-calendar__collapse {
+    transition: none;
+  }
+}
+
+.date-calendar__nav {
+  display: grid;
+  grid-template-columns: 2rem 1fr 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.date-calendar__nav strong,
+.date-calendar__month-toggle {
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.date-calendar__month-toggle {
+  min-height: 2rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.date-calendar__month-toggle:hover,
+.date-calendar__month-toggle.is-active {
+  background: color-mix(in srgb, var(--leaf) 16%, transparent);
+}
+
+.date-calendar__nav button,
+.date-calendar__grid button,
+.date-calendar__months button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+}
+
+.date-calendar__nav > button:not(.date-calendar__month-toggle) {
+  min-height: 2rem;
+  border-radius: 0.6rem;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.date-calendar__nav > button:not(.date-calendar__month-toggle):not(:disabled):hover {
+  background: color-mix(in srgb, var(--leaf) 16%, transparent);
+}
+
+.date-calendar__nav button:disabled {
+  opacity: 0.25;
+}
+
+.date-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.22rem;
+}
+
+.date-calendar__months {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.date-calendar__months button {
+  min-height: 2.2rem;
+  border-radius: 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.date-calendar__months button:not(:disabled) {
+  color: var(--nut-soft);
+  background: color-mix(in srgb, var(--leaf) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--leaf) 36%, transparent);
+  cursor: pointer;
+}
+
+.date-calendar__months button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--nut) 22%, transparent);
+}
+
+.date-calendar__months button.is-selected {
+  color: var(--on-gold);
+  background: var(--nut);
+}
+
+.date-calendar__months button:disabled {
+  color: var(--ink-dim);
+  opacity: 0.28;
+}
+
+.date-calendar__weekday {
+  padding: 0.2rem 0;
+  color: var(--ink-dim);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.date-calendar__grid button {
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: 50%;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.date-calendar__grid button:not(:disabled) {
+  color: var(--nut-soft);
+  background: color-mix(in srgb, var(--leaf) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--leaf) 42%, transparent);
+  cursor: pointer;
+}
+
+.date-calendar__grid button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--nut) 25%, transparent);
+  transform: translateY(-1px);
+}
+
+.date-calendar__grid button.is-selected {
+  color: var(--on-gold);
+  background: var(--nut);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nut) 30%, transparent);
+}
+
+.date-calendar__grid button:disabled {
+  color: var(--ink-dim);
+  opacity: 0.22;
+}
+
+.date-calendar__hint {
+  margin: 0.5rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.date-browser__notice {
+  margin: 0;
+  color: #8a6a12;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.history-unlock {
+  display: grid;
+  gap: 0.85rem;
+  padding: clamp(1rem, 3vw, 1.35rem) var(--space-panel-x);
+}
+
+.history-unlock__copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.history-unlock__copy p,
+.history-unlock__copy span {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.history-unlock__form {
+  display: grid;
+  gap: 0.75rem;
+  align-items: end;
+  grid-template-columns: minmax(10rem, 12.5rem) minmax(10rem, 1fr) auto;
+}
+
+.history-unlock__image {
+  width: 100%;
+  max-width: 12.5rem;
+  height: auto;
+  border-radius: 0.65rem;
+  background: #e8e8e8;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.history-unlock__field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.history-unlock__field span {
+  font-size: 0.82rem;
+  color: var(--ink-dim);
+}
+
+.history-unlock__field input {
+  width: 100%;
+}
+
+.history-unlock__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.history-unlock__error,
+.history-unlock__success {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.history-unlock__error {
+  color: #a33b2d;
+}
+
+.history-unlock__success {
+  color: #2f6b3a;
+}
+
+@media (max-width: 820px) {
+  .history-unlock__form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.error__healing {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
 }
 
 .stat {
@@ -771,9 +1259,66 @@ html[data-theme='light'] .hero-copy {
   gap: 0.4rem;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.25rem;
-  scrollbar-width: thin;
+  padding-bottom: 0.45rem;
   overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+}
+
+.chip-scroll::-webkit-scrollbar {
+  height: 7px;
+}
+
+.chip-scroll::-webkit-scrollbar-thumb {
+  border-width: 2px;
+}
+
+.chip-scroll::-webkit-scrollbar-track:horizontal {
+  margin-inline: 0.25rem;
+}
+
+/* Soften whichever end still has chips hidden past the edge. */
+@property --chip-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --chip-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@supports (animation-timeline: scroll(self inline)) {
+  .chip-scroll {
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 var(--chip-fade-start),
+      #000 calc(100% - var(--chip-fade-end)),
+      transparent 100%
+    );
+    animation: chip-scroll-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+
+  @keyframes chip-scroll-fade {
+    0% {
+      --chip-fade-start: 0px;
+      --chip-fade-end: 1.75rem;
+    }
+
+    4%,
+    96% {
+      --chip-fade-start: 1.75rem;
+      --chip-fade-end: 1.75rem;
+    }
+
+    100% {
+      --chip-fade-start: 1.75rem;
+      --chip-fade-end: 0px;
+    }
+  }
 }
 
 .chip-scroll .chip {
@@ -789,11 +1334,59 @@ html[data-theme='light'] .hero-copy {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0 var(--space-panel-x) var(--space-panel-y);
+  /* The rail rides the inner edge of the scroller, so pull the whole scroller
+     off the panel border instead of letting it sit on the rounded outline. */
+  margin-inline: 0.5rem;
+  padding: 0 calc(var(--space-panel-x) - 0.5rem) var(--space-panel-y);
   max-height: min(62vh, 560px);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Same idea vertically: fade the rows that are cut by the top or bottom fold. */
+@property --list-fade-start {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --list-fade-end {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@supports (animation-timeline: scroll(self block)) {
+  .mandi-compact {
+    mask-image: linear-gradient(
+      180deg,
+      transparent 0,
+      #000 var(--list-fade-start),
+      #000 calc(100% - var(--list-fade-end)),
+      transparent 100%
+    );
+    animation: list-scroll-fade linear both;
+    animation-timeline: scroll(self block);
+  }
+
+  @keyframes list-scroll-fade {
+    0% {
+      --list-fade-start: 0px;
+      --list-fade-end: 2rem;
+    }
+
+    3%,
+    97% {
+      --list-fade-start: 2rem;
+      --list-fade-end: 2rem;
+    }
+
+    100% {
+      --list-fade-start: 2rem;
+      --list-fade-end: 0px;
+    }
+  }
 }
 
 .mandi-row {
@@ -806,6 +1399,17 @@ html[data-theme='light'] .hero-copy {
 
 .mandi-row.featured {
   background: var(--table-featured);
+}
+
+/* Rows sit on top of the frosted panel, so keep them translucent in light mode. */
+html[data-theme='light'] .mandi-row {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+html[data-theme='light'] .mandi-row.featured {
+  background: rgba(250, 243, 226, 0.72);
 }
 
 .mandi-row__main {
@@ -973,22 +1577,14 @@ html[data-theme='light'] .hero-copy {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: var(--nut) var(--table-header);
 }
 
 .table-wrap--rates::-webkit-scrollbar {
   height: 9px;
 }
 
-.table-wrap--rates::-webkit-scrollbar-track {
-  background: var(--table-header);
-}
-
 .table-wrap--rates::-webkit-scrollbar-thumb {
-  background: var(--nut);
-  border-radius: 999px;
-  border: 2px solid var(--table-header);
+  border-width: 2px;
 }
 
 .rates-scroll__fade {
@@ -1096,7 +1692,6 @@ html[data-theme='light'] .rates--scroll .sticky-col {
 .shell,
 #local,
 .variety-card,
-.agent-board,
 #rates {
   max-width: 100%;
   min-width: 0;
@@ -1211,6 +1806,121 @@ table.rates tr.featured td {
 .trend-chart-caption span {
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
+}
+
+.trend-chart-caption__latest {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.5rem;
+}
+
+.trend-chart-caption__latest label {
+  color: var(--ink-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.trend-chart-caption__latest b {
+  color: var(--nut-soft);
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-chart-help {
+  margin: 0 0 0.5rem;
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-legend__line {
+  width: 1.4rem;
+  height: 0;
+  border-top-width: 3px;
+  border-top-style: solid;
+  border-radius: 2px;
+}
+
+.chart-legend__line--avg {
+  border-top-color: #3da873;
+}
+
+.chart-legend__line--max {
+  border-top-style: dashed;
+  border-top-color: #e8c56a;
+}
+
+.chart-legend__line--min {
+  border-top-style: dashed;
+  border-top-color: #8aa4b8;
+}
+
+.chart-foot {
+  margin: 0.35rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.78rem;
+}
+
+.chart-tip {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--chart-tip-bg);
+  color: var(--ink);
+  font-size: 0.82rem;
+  box-shadow: var(--panel-shadow);
+}
+
+.chart-tip__date {
+  margin-bottom: 0.35rem;
+  font-weight: 800;
+}
+
+.chart-tip__row {
+  display: grid;
+  grid-template-columns: 0.6rem 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0;
+}
+
+.chart-tip__row i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.chart-tip__row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tip__foot {
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-dim);
+  font-size: 0.74rem;
 }
 
 .trend-side-title {

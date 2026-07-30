@@ -19,7 +19,19 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend import agent_store
+from backend import agmarknet_access, archive
+from backend.dates import format_date as _format_date
+from backend.dates import parse_date as _parse_date
+
+# data.gov.in never answers requests that look like a bare script client: it
+# accepts the connection and then holds it open until the read times out.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+}
 
 COMMODITY = "Arecanut(Betelnut/Supari)"
 DATAGOV_RESOURCE = "9ef84268-d588-465a-a308-a864a43d0070"
@@ -59,6 +71,88 @@ _cache_lock = threading.Lock()
 _agmarknet_local = threading.local()
 _fetch_sem = threading.Semaphore(6)
 
+# Upstream publishes only a short live window; the archive keeps the older days.
+MAX_SERVE_WINDOW_DAYS = 400
+MAX_UPSTREAM_LOOKBACK_DAYS = 30
+AGMARKNET_BLOCK_SECONDS = 6 * 3600
+HEAL_INTERVAL_HEALTHY_SECONDS = 900
+HEAL_INTERVAL_FIRST_RETRY_SECONDS = 60
+HEAL_INTERVAL_MAX_SECONDS = 900
+
+_health_lock = threading.Lock()
+_health: dict[str, Any] = {
+    "last_success_at": 0.0,
+    "last_attempt_at": 0.0,
+    "consecutive_failures": 0,
+    "last_error": None,
+    "agmarknet_blocked_until": 0.0,
+    "sources": {"agmarknet": "unknown", "data.gov.in": "unknown"},
+}
+
+
+def _record_source(name: str, ok: bool, detail: str | None = None) -> None:
+    with _health_lock:
+        _health["sources"][name] = "ok" if ok else (detail or "failed")
+
+
+def _record_fetch(rows: int, error: str | None = None) -> None:
+    now = time.time()
+    with _health_lock:
+        _health["last_attempt_at"] = now
+        if rows > 0:
+            _health["last_success_at"] = now
+            _health["consecutive_failures"] = 0
+            _health["last_error"] = None
+        else:
+            _health["consecutive_failures"] += 1
+            _health["last_error"] = error or "no rows returned by official sources"
+
+
+def _heal_delay_seconds() -> float:
+    with _health_lock:
+        failures = int(_health["consecutive_failures"])
+    if failures <= 0:
+        return HEAL_INTERVAL_HEALTHY_SECONDS
+    backoff = HEAL_INTERVAL_FIRST_RETRY_SECONDS * (2 ** (failures - 1))
+    return float(min(backoff, HEAL_INTERVAL_MAX_SECONDS))
+
+
+def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
+    with _health_lock:
+        last_success = float(_health["last_success_at"])
+        snapshot = {
+            "consecutive_failures": int(_health["consecutive_failures"]),
+            "last_error": _health["last_error"],
+            "sources": dict(_health["sources"]),
+        }
+    if fresh_rows > 0:
+        state = "live"
+    elif served_rows > 0:
+        state = "archived"
+    else:
+        state = "unavailable"
+    agmarknet_status = str(snapshot["sources"].get("agmarknet") or "")
+    return {
+        **snapshot,
+        "state": state,
+        "captcha_required": agmarknet_status == "captcha_required",
+        "agmarknet_ticket": agmarknet_access.ticket_status(),
+        "last_success_at": (
+            datetime.fromtimestamp(last_success).isoformat(timespec="seconds")
+            if last_success
+            else None
+        ),
+        "archive": archive.stats(),
+    }
+
+
+def _clear_agmarknet_block() -> None:
+    with _health_lock:
+        _health["agmarknet_blocked_until"] = 0.0
+        if _health["sources"].get("agmarknet") == "captcha_required":
+            _health["sources"]["agmarknet"] = "ok"
+
+
 PRICE_CACHE_PATH = Path(
     os.environ.get("PRICE_CACHE_PATH")
     or (
@@ -67,6 +161,19 @@ PRICE_CACHE_PATH = Path(
         else Path(__file__).resolve().parent / "data" / "prices_cache.json"
     )
 )
+
+
+def _invalidate_price_cache() -> None:
+    with _cache_lock:
+        _cache["data"] = None
+        _cache["fetched_at"] = 0.0
+        _cache["key"] = None
+    try:
+        if PRICE_CACHE_PATH.exists():
+            PRICE_CACHE_PATH.unlink()
+    except OSError:
+        pass
+
 
 app = FastAPI(
     title="Araka Net API",
@@ -121,9 +228,19 @@ class PricesResponse(BaseModel):
     summary: SummaryStats
     records: list[PriceRecord]
     board_date: str | None = None
+    available_dates: list[str] = Field(default_factory=list)
     history: list[dict[str, Any]] = Field(default_factory=list)
     history_by_variety: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     top_markets: list[dict[str, Any]] = Field(default_factory=list)
+    feed_health: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgmarknetUnlockRequest(BaseModel):
+    captcha_key: str = Field(min_length=8)
+    captcha: str = Field(min_length=3, max_length=16)
+    days: int = Field(default=MAX_SERVE_WINDOW_DAYS, ge=7, le=MAX_SERVE_WINDOW_DAYS)
+    scope: str = Field(default="karnataka")
+    states: str | None = None
 
 
 def _parse_number(value: Any) -> float:
@@ -136,21 +253,6 @@ def _parse_number(value: Any) -> float:
         return float(text) if text else 0.0
     except ValueError:
         return 0.0
-
-
-def _parse_date(value: str) -> date | None:
-    if not value:
-        return None
-    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(value.strip(), fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def _format_date(d: date) -> str:
-    return d.strftime("%d-%m-%Y")
 
 
 def _is_shivamogga(district: str, market: str) -> bool:
@@ -230,28 +332,52 @@ def _cached_response(response: PricesResponse, fetched_at: float, now: float) ->
     return response.model_copy(update={"cache_age_seconds": int(max(0, now - fetched_at))})
 
 
+def _agmarknet_blocked() -> bool:
+    with _health_lock:
+        return time.time() < float(_health.get("agmarknet_blocked_until") or 0.0)
+
+
+def _block_agmarknet(reason: str) -> None:
+    """Pause AGMARKNET calls so a hard rejection cannot eat the fetch budget."""
+    with _health_lock:
+        _health["agmarknet_blocked_until"] = time.time() + AGMARKNET_BLOCK_SECONDS
+        _health["sources"]["agmarknet"] = reason
+
+
 def _fetch_agmarknet_state(state: str, from_date: str, to_date: str) -> list[dict]:
     """Fetch authentic AGMARKNET rows for one state via official SDK."""
-    from agmarknet.exceptions import AgmarknetError
-
-    with _fetch_sem:
-        api = _get_agmarknet()
-        try:
-            df = api.report(
-                from_date=from_date,
-                to_date=to_date,
-                commodity=COMMODITY,
-                state=state,
-                data_type="price",
-                limit=1000,
-            )
-        except AgmarknetError:
-            return []
-        except Exception:
-            return []
+    df = None
+    last_error: str | None = None
+    for attempt in range(2):
+        with _fetch_sem:
+            api = _get_agmarknet()
+            try:
+                df = api.report(
+                    from_date=from_date,
+                    to_date=to_date,
+                    commodity=COMMODITY,
+                    state=state,
+                    data_type="price",
+                    limit=1000,
+                )
+            except Exception as exc:
+                df = None
+                detail = f"{exc} {getattr(exc, 'response_text', '') or ''}".lower()
+                if "captcha" in detail:
+                    # AGMARKNET now gates this endpoint behind a captcha; retrying
+                    # cannot help until that changes.
+                    _block_agmarknet("captcha_required")
+                    return []
+                last_error = type(exc).__name__
+        if df is not None and not getattr(df, "empty", True):
+            break
+        if attempt == 0:
+            time.sleep(1.0)
 
     if df is None or getattr(df, "empty", True):
+        _record_source("agmarknet", False, last_error)
         return []
+    _record_source("agmarknet", True)
 
     rows: list[dict] = []
     records = df.to_dict(orient="records")
@@ -276,50 +402,93 @@ def _fetch_agmarknet_state(state: str, from_date: str, to_date: str) -> list[dic
     return rows
 
 
-async def _fetch_datagovin() -> list[dict]:
-    """Supplement with today's open-data feed (data.gov.in / AGMARKNET)."""
+DATAGOV_PAGE_SIZE = 100
+DATAGOV_MAX_PAGES = 12
+DATAGOV_ATTEMPTS_PER_PAGE = 3
+
+
+async def _datagov_page(client: httpx.AsyncClient, offset: int) -> dict[str, Any]:
+    """One page of the open-data feed, retried through transient stalls."""
     url = f"https://api.data.gov.in/resource/{DATAGOV_RESOURCE}"
     params = {
         "api-key": DATAGOV_KEY,
         "format": "json",
-        "limit": 100,
+        "limit": DATAGOV_PAGE_SIZE,
+        "offset": offset,
         "filters[commodity]": COMMODITY,
     }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+    last_error: Exception | None = None
+    for attempt in range(DATAGOV_ATTEMPTS_PER_PAGE):
+        try:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
-            payload = resp.json()
-    except Exception:
-        return []
+            return resp.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            last_error = exc
+            if attempt < DATAGOV_ATTEMPTS_PER_PAGE - 1:
+                await asyncio.sleep(1.0 * (2**attempt))
+    raise last_error if last_error else RuntimeError("data.gov.in page failed")
 
+
+async def _fetch_datagovin() -> list[dict]:
+    """Read every arecanut row the open-data feed currently publishes."""
     rows: list[dict] = []
-    for rec in payload.get("records") or []:
-        rows.append(
-            {
-                "state": rec.get("state") or "",
-                "district": rec.get("district") or "",
-                "market": rec.get("market") or "",
-                "commodity": rec.get("commodity") or COMMODITY,
-                "variety": rec.get("variety") or "Other",
-                "grade": rec.get("grade") or "",
-                "arrival_date": rec.get("arrival_date") or "",
-                "min_price": _parse_number(rec.get("min_price")),
-                "max_price": _parse_number(rec.get("max_price")),
-                "modal_price": _parse_number(rec.get("modal_price")),
-                "arrival_qty": None,
-                "unit": "Rs./Quintal",
-                "source": "data.gov.in",
-            }
-        )
+    offset = 0
+    failure: str | None = None
+    timeout = httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0)
+    async with httpx.AsyncClient(
+        timeout=timeout, follow_redirects=True, headers=REQUEST_HEADERS
+    ) as client:
+        for _ in range(DATAGOV_MAX_PAGES):
+            try:
+                payload = await _datagov_page(client, offset)
+            except Exception as exc:
+                failure = type(exc).__name__
+                break
+
+            records = payload.get("records") or []
+            for rec in records:
+                rows.append(
+                    {
+                        "state": rec.get("state") or "",
+                        "district": rec.get("district") or "",
+                        "market": rec.get("market") or "",
+                        "commodity": rec.get("commodity") or COMMODITY,
+                        "variety": rec.get("variety") or "Other",
+                        "grade": rec.get("grade") or "",
+                        "arrival_date": rec.get("arrival_date") or "",
+                        "min_price": _parse_number(rec.get("min_price")),
+                        "max_price": _parse_number(rec.get("max_price")),
+                        "modal_price": _parse_number(rec.get("modal_price")),
+                        "arrival_qty": None,
+                        "unit": "Rs./Quintal",
+                        "source": "data.gov.in",
+                    }
+                )
+
+            offset += len(records)
+            total = int(_parse_number(payload.get("total")))
+            if not records or (total and offset >= total):
+                break
+
+    # A later page failing still leaves the earlier official rows usable.
+    _record_source("data.gov.in", bool(rows), failure)
     return rows
 
 
 def _normalize(raw_rows: list[dict]) -> list[PriceRecord]:
-    # Group by market+variety for day-over-day change
+    """Keep every real dated lot and calculate change against its previous lot."""
     by_key: dict[str, list[dict]] = {}
     for row in raw_rows:
-        key = _slug(row["state"], row["district"], row["market"], row["variety"])
+        if not _parse_date(str(row.get("arrival_date") or "")):
+            continue
+        key = _slug(
+            row["state"],
+            row["district"],
+            row["market"],
+            row["variety"],
+            row.get("grade") or "",
+        )
         by_key.setdefault(key, []).append(row)
 
     records: list[PriceRecord] = []
@@ -328,41 +497,66 @@ def _normalize(raw_rows: list[dict]) -> list[PriceRecord]:
             key=lambda r: _parse_date(r["arrival_date"]) or date.min,
             reverse=True,
         )
-        latest = items[0]
-        prev = items[1] if len(items) > 1 else None
-        change = None
-        change_pct = None
-        if prev and latest["modal_price"] and prev["modal_price"]:
-            change = round(latest["modal_price"] - prev["modal_price"], 2)
-            if prev["modal_price"]:
+        seen: set[tuple[Any, ...]] = set()
+        unique_items: list[dict] = []
+        for item in items:
+            signature = (
+                _format_date(_parse_date(item["arrival_date"]) or date.min),
+                item.get("grade") or "",
+                item.get("min_price") or 0,
+                item.get("max_price") or 0,
+                item.get("modal_price") or 0,
+            )
+            if signature not in seen:
+                seen.add(signature)
+                unique_items.append(item)
+
+        for index, current in enumerate(unique_items):
+            prev = unique_items[index + 1] if index + 1 < len(unique_items) else None
+            change = None
+            change_pct = None
+            if prev and current["modal_price"] and prev["modal_price"]:
+                change = round(current["modal_price"] - prev["modal_price"], 2)
                 change_pct = round((change / prev["modal_price"]) * 100, 2)
 
-        records.append(
-            PriceRecord(
-                id=key,
-                state=latest["state"],
-                district=latest["district"],
-                market=latest["market"],
-                commodity=latest["commodity"],
-                variety=latest["variety"],
-                grade=latest["grade"],
-                arrival_date=latest["arrival_date"],
-                min_price=latest["min_price"],
-                max_price=latest["max_price"],
-                modal_price=latest["modal_price"],
-                arrival_qty=latest.get("arrival_qty"),
-                unit=latest.get("unit") or "Rs./Quintal",
-                change=change,
-                change_pct=change_pct,
-                is_shivamogga=_is_shivamogga(latest["district"], latest["market"]),
-                source=latest.get("source") or "AGMARKNET",
+            arrival_day = _parse_date(current["arrival_date"])
+            arrival_date = _format_date(arrival_day) if arrival_day else current["arrival_date"]
+            records.append(
+                PriceRecord(
+                    id=f"{key}-{arrival_date}-{index}",
+                    state=current["state"],
+                    district=current["district"],
+                    market=current["market"],
+                    commodity=current["commodity"],
+                    variety=current["variety"],
+                    grade=current["grade"],
+                    arrival_date=arrival_date,
+                    min_price=current["min_price"],
+                    max_price=current["max_price"],
+                    modal_price=current["modal_price"],
+                    arrival_qty=current.get("arrival_qty"),
+                    unit=current.get("unit") or "Rs./Quintal",
+                    change=change,
+                    change_pct=change_pct,
+                    is_shivamogga=_is_shivamogga(current["district"], current["market"]),
+                    source=current.get("source") or "AGMARKNET",
+                )
             )
-        )
 
-    records.sort(key=lambda r: (not r.is_shivamogga, -r.modal_price, r.market))
-    # Keep latest lot per market+variety across dates. Live-day filtering is applied
-    # for board summary/top markets; place variety boards may fall back to older dates.
+    records.sort(
+        key=lambda r: (
+            -(_parse_date(r.arrival_date) or date.min).toordinal(),
+            not r.is_shivamogga,
+            -r.modal_price,
+            r.market,
+        )
+    )
     return records
+
+
+def _available_dates(records: list[PriceRecord]) -> list[str]:
+    days = {_parse_date(record.arrival_date) for record in records}
+    return [_format_date(day) for day in sorted((d for d in days if d), reverse=True)]
 
 
 def _pick_live_day(records: list[PriceRecord]) -> date | None:
@@ -511,7 +705,7 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
-    cache_key = f"live4|{days}|{','.join(sorted(states))}"
+    cache_key = f"dated1|{days}|{','.join(sorted(states))}"
 
     with _cache_lock:
         mem = _cache
@@ -571,56 +765,95 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
     return response
 
 
-async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
+def _merge_rows(stored: list[dict], fresh: list[dict]) -> list[dict]:
+    """Union of archived and freshly fetched lots; a fresh lot wins on conflict."""
+    merged: dict[str, dict] = {}
+    for row in [*stored, *fresh]:
+        key = archive.row_key(row)
+        if key:
+            merged[key] = row
+    return list(merged.values())
+
+
+async def _fetch_agmarknet_rows(states: list[str], lookback: int, deadline: float) -> list[dict]:
+    """Pull AGMARKNET rows for each state inside its own wall-clock budget."""
     to_d = date.today()
-    # Multi-state boards use a shorter window so AGMARKNET pagination stays quick
-    lookback = 7 if len(states) > 2 else max(days, 7)
     from_d = to_d - timedelta(days=lookback)
     from_s, to_s = from_d.isoformat(), to_d.isoformat()
 
-    loop = asyncio.get_running_loop()
-    datagov_task = asyncio.create_task(_fetch_datagovin())
+    if _agmarknet_blocked():
+        return []
 
-    # Vercel/serverless: large parallel fan-out to AGMARKNET often returns empty.
-    # Fetch in small batches with an overall deadline so we keep real rates.
+    loop = asyncio.get_running_loop()
+    # Serverless hosts drop large parallel fan-outs to AGMARKNET, so fetch in
+    # small batches and stop once the budget is gone.
     batch_size = 2 if len(states) > 2 else 1
-    per_state_timeout = 18.0
-    overall_deadline = time.time() + (50.0 if len(states) > 2 else 25.0)
     raw: list[dict] = []
 
     async def one_state(state: str) -> list[dict]:
+        remaining = deadline - time.time()
+        if remaining <= 1.0:
+            return []
         try:
             return await asyncio.wait_for(
                 loop.run_in_executor(None, _fetch_agmarknet_state, state, from_s, to_s),
-                timeout=per_state_timeout,
+                timeout=min(remaining, 20.0),
             )
         except Exception:
             return []
 
-    for i in range(0, len(states), batch_size):
-        if time.time() >= overall_deadline:
+    for index in range(0, len(states), batch_size):
+        if time.time() >= deadline:
             break
-        batch = states[i : i + batch_size]
-        results = await asyncio.gather(*(one_state(state) for state in batch))
-        for part in results:
+        batch = states[index : index + batch_size]
+        for part in await asyncio.gather(*(one_state(state) for state in batch)):
             raw.extend(part)
 
-    # Guarantee Karnataka data if multi-state path produced nothing
+    # Karnataka carries most arecanut lots, so never leave it out on a partial run
     if not raw and "Karnataka" in states:
         raw.extend(await one_state("Karnataka"))
 
+    return raw
+
+
+async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
+    lookback = 7 if len(states) > 2 else min(max(days, 7), MAX_UPSTREAM_LOOKBACK_DAYS)
+    budget = 55.0 if len(states) > 2 else 40.0
+    hard_deadline = time.time() + budget
+    # Each source gets its own share, so a stalling AGMARKNET can never starve
+    # data.gov.in (and vice versa) into looking like "no rates today".
+    agmarknet_deadline = time.time() + budget * 0.5
+
+    datagov_task = asyncio.create_task(_fetch_datagovin())
+
+    fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
+    if not fresh and not _agmarknet_blocked() and time.time() < agmarknet_deadline - 5.0:
+        # Transient upstream timeouts are common; give it one more chance now
+        # instead of publishing an empty board.
+        await asyncio.sleep(1.5)
+        fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
+
     try:
-        datagov = await asyncio.wait_for(datagov_task, timeout=8.0)
-        raw.extend(datagov)
+        fresh.extend(
+            await asyncio.wait_for(
+                datagov_task, timeout=max(5.0, hard_deadline - time.time())
+            )
+        )
     except Exception:
         datagov_task.cancel()
+        _record_source("data.gov.in", False, "timeout")
+
+    archive.remember(fresh)
+    _record_fetch(len(fresh))
+
+    serve_days = min(max(days, lookback), MAX_SERVE_WINDOW_DAYS)
+    raw = _merge_rows(archive.rows_since(date.today() - timedelta(days=serve_days)), fresh)
 
     records = _normalize(raw)
     live_day = _pick_live_day(records)
     live_records = _filter_live_day(records, live_day) or records
-    hist_days = min(days, lookback)
-    history = _build_history(raw, days=hist_days)
-    history_by_variety = _build_history_by_variety(raw, days=hist_days)
+    history = _build_history(raw, days=serve_days)
+    history_by_variety = _build_history_by_variety(raw, days=serve_days)
     return PricesResponse(
         updated_at=datetime.now().isoformat(timespec="seconds"),
         source="AGMARKNET (api.agmarknet.gov.in) + data.gov.in",
@@ -628,32 +861,131 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
         summary=_summary(live_records),
         records=records,
         board_date=_format_date(live_day) if live_day else None,
+        available_dates=_available_dates(records),
         history=history,
         history_by_variety=history_by_variety,
         top_markets=_build_top_markets(live_records),
+        feed_health=_feed_health(fresh_rows=len(fresh), served_rows=len(records)),
     )
 
 
 @app.get("/api/health")
 async def health():
+    with _health_lock:
+        last_success = float(_health["last_success_at"])
+        failures = int(_health["consecutive_failures"])
+        last_error = _health["last_error"]
+        sources = dict(_health["sources"])
     return {
         "status": "ok",
         "service": "Araka Net",
         "commodity": COMMODITY,
-        "sources": ["AGMARKNET", "data.gov.in", "community_agent_quotes"],
-        "agent_data_note": (
-            "Private local-agent asking rates are not published by AGMARKNET. "
-            "Araka Net stores community-reported agent quotes and compares them to official mandi modal."
-        ),
+        "sources": sources,
+        "data_note": "Only official dated market rows are returned; missing dates are never generated.",
+        "self_healing": {
+            "consecutive_failures": failures,
+            "last_error": last_error,
+            "next_retry_in_seconds": int(_heal_delay_seconds()),
+            "last_success_at": (
+                datetime.fromtimestamp(last_success).isoformat(timespec="seconds")
+                if last_success
+                else None
+            ),
+        },
+        "archive": archive.stats(),
+    }
+
+
+@app.get("/api/agmarknet/captcha")
+async def agmarknet_captcha():
+    """Fresh AGMARKNET captcha image for the visitor to solve."""
+    loop = asyncio.get_running_loop()
+    try:
+        challenge = await loop.run_in_executor(None, agmarknet_access.generate_captcha)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not load AGMARKNET captcha: {exc}") from exc
+    if not challenge.get("captcha_key") or not challenge.get("image_data_url"):
+        raise HTTPException(status_code=502, detail="AGMARKNET returned an empty captcha.")
+    return challenge
+
+
+@app.get("/api/agmarknet/status")
+async def agmarknet_status():
+    with _health_lock:
+        source = _health["sources"].get("agmarknet")
+        blocked_until = float(_health.get("agmarknet_blocked_until") or 0.0)
+    return {
+        "captcha_required": source == "captcha_required" or time.time() < blocked_until,
+        "source": source,
+        "ticket": agmarknet_access.ticket_status(),
+        "archive": archive.stats(),
+    }
+
+
+@app.post("/api/agmarknet/unlock")
+async def agmarknet_unlock(body: AgmarknetUnlockRequest):
+    """Visitor solves the AGMARKNET captcha; we archive the exact official history."""
+    if body.states:
+        state_list = [s.strip() for s in body.states.split(",") if s.strip()]
+    elif body.scope.lower() == "india":
+        # One captcha covers one filter set — prefer the main belt, not all India,
+        # so pagination finishes inside the ticket budget.
+        state_list = ["Karnataka", "Kerala", "Assam", "Tamil Nadu"]
+    else:
+        state_list = DEFAULT_STATES
+
+    loop = asyncio.get_running_loop()
+    try:
+        unlocked = await loop.run_in_executor(
+            None,
+            lambda: agmarknet_access.unlock_history(
+                captcha_key=body.captcha_key,
+                captcha=body.captcha,
+                states=state_list,
+                lookback_days=body.days,
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        detail = str(exc)
+        status = 400 if "CAPTCHA" in detail.upper() or "captcha" in detail.lower() else 502
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+    rows = unlocked["rows"]
+    added = archive.remember(rows)
+    _record_source("agmarknet", True)
+    _record_fetch(len(rows))
+    _clear_agmarknet_block()
+    _invalidate_price_cache()
+
+    prices = await _load_prices(days=body.days, states=state_list, force=True)
+    return {
+        "ok": True,
+        "added_rows": added,
+        "fetched_rows": unlocked["row_count"],
+        "total_count": unlocked["total_count"],
+        "pages_fetched": unlocked["pages_fetched"],
+        "from_date": unlocked["from_date"],
+        "to_date": unlocked["to_date"],
+        "states": unlocked["states"],
+        "available_dates": unlocked["available_dates"],
+        "date_count": unlocked["date_count"],
+        "report_access": unlocked["report_access"],
+        "prices": prices,
     }
 
 
 @app.get("/api/prices", response_model=PricesResponse)
 async def get_prices(
-    days: int = Query(14, ge=3, le=60),
+    days: int = Query(14, ge=3, le=MAX_SERVE_WINDOW_DAYS),
     states: str | None = Query(None, description="Comma-separated state names"),
     scope: str = Query("karnataka", description="'karnataka' or 'india'"),
     refresh: bool = Query(False),
+    rate_date: str | None = Query(
+        None,
+        description="Optional exact available date (DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD)",
+    ),
 ):
     if states:
         state_list = [s.strip() for s in states.split(",") if s.strip()]
@@ -661,7 +993,22 @@ async def get_prices(
         state_list = ALL_INDIA_STATES
     else:
         state_list = DEFAULT_STATES
-    return await _load_prices(days=days, states=state_list, force=refresh)
+    response = await _load_prices(days=days, states=state_list, force=refresh)
+    if rate_date is None:
+        return response
+    selected_day = _parse_date(rate_date)
+    if selected_day is None:
+        raise HTTPException(status_code=400, detail="Invalid rate_date.")
+    selected = _filter_live_day(response.records, selected_day)
+    selected_date = _format_date(selected_day)
+    return response.model_copy(
+        update={
+            "summary": _summary(selected),
+            "records": selected,
+            "board_date": selected_date,
+            "top_markets": _build_top_markets(selected),
+        }
+    )
 
 
 @app.get("/api/history")
@@ -713,136 +1060,26 @@ async def get_market_history(
     }
 
 
-class AgentQuoteIn(BaseModel):
-    variety_key: str = Field(..., description="sarakku|bede|rashi|andal")
-    district: str
-    market: str | None = "Local agent"
-    note: str | None = None
-    quote_date: str | None = None
-    lat: float | None = None
-    lng: float | None = None
-    market_modal: float | None = Field(
-        None,
-        description="Official mandi modal for this place+variety; used to validate agent amount",
-    )
-    # Single amount (legacy) or purchase range
-    rate: float | None = Field(None, description="Single purchase ₹/quintal")
-    rate_min: float | None = Field(None, description="Purchase minimum ₹/quintal")
-    rate_max: float | None = Field(None, description="Purchase maximum ₹/quintal")
-
-
-AGENT_MAX_OVER_MARKET = 3000
-
-
-def _validate_against_market(rate: float, modal: float) -> None:
-    floor = float(modal)
-    ceiling = floor + AGENT_MAX_OVER_MARKET
-    if rate < floor:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Amount cannot be less than the mandi market rate (₹{round(floor):,}).",
-        )
-    if rate > ceiling:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Amount cannot exceed the mandi market rate by more than ₹{AGENT_MAX_OVER_MARKET:,}. "
-                f"Max allowed: ₹{round(ceiling):,}."
-            ),
-        )
-
-
-@app.get("/api/agent-quotes")
-async def get_agent_quotes(
-    district: str | None = Query(None),
-    market: str | None = Query(None, description="Optional APMC / place filter"),
-    variety_key: str | None = Query(None),
-    days: int = Query(30, ge=1, le=90),
-):
-    quotes = agent_store.list_quotes(
-        district=district, market=market, variety_key=variety_key, days=days
-    )
-    by_variety = agent_store.averages_by_variety(
-        district=district, market=market, days=days
-    )
-    by_place = agent_store.stats_by_place_and_variety(district=district, days=days)
-    if market:
-        needle = market.lower().strip()
-        by_place = [
-            row
-            for row in by_place
-            if needle in str(row.get("market") or "").lower()
-            or str(row.get("market") or "").lower() in needle
-        ]
-    return {
-        "source": "user_submissions",
-        "note": (
-            "Local agent amounts come only from users/agents who submit their real purchase "
-            "₹/quintal on this site for a place (GPS or chosen APMC). For the same place + variety, "
-            "we show the minimum and maximum submitted amounts — not an average. "
-            f"Each amount must be at least the mandi market rate and at most ₹{AGENT_MAX_OVER_MARKET} above it. "
-            "AGMARKNET does not publish private agent quotes."
-        ),
-        "count": len(quotes),
-        "averages_by_variety": by_variety,
-        "stats_by_place": by_place,
-        "quotes": quotes,
-    }
-
-
-@app.post("/api/agent-quotes")
-async def post_agent_quote(body: AgentQuoteIn):
-    modal = body.market_modal
-    if modal is None or modal <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Mandi market rate is required for this variety at this place before submitting.",
-        )
-
-    rates: list[float] = []
-    if body.rate_min is not None or body.rate_max is not None:
-        rmin = body.rate_min if body.rate_min is not None else body.rate_max
-        rmax = body.rate_max if body.rate_max is not None else body.rate_min
-        assert rmin is not None and rmax is not None
-        if rmin > rmax:
-            raise HTTPException(
-                status_code=400,
-                detail="Purchase minimum cannot be greater than purchase maximum.",
+async def _self_heal_loop() -> None:
+    """Re-fetch on a schedule that tightens while the official feeds are failing."""
+    while True:
+        await asyncio.sleep(_heal_delay_seconds())
+        try:
+            await _load_prices(
+                days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=True
             )
-        rates = [float(rmin)] if float(rmin) == float(rmax) else [float(rmin), float(rmax)]
-    elif body.rate is not None:
-        rates = [float(body.rate)]
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Enter purchase minimum and maximum amounts (or a single purchase amount).",
-        )
-
-    for rate in rates:
-        _validate_against_market(rate, float(modal))
-
-    try:
-        base = body.model_dump()
-        base.pop("market_modal", None)
-        base.pop("rate_min", None)
-        base.pop("rate_max", None)
-        base.pop("rate", None)
-        rows = []
-        for rate in rates:
-            rows.append(agent_store.add_quote({**base, "rate": rate}))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True, "quote": rows[0], "quotes": rows, "count": len(rows)}
+        except Exception:
+            _record_fetch(0, "refresh attempt raised")
 
 
 @app.on_event("startup")
 async def warmup():
-    """Warm Karnataka cache on boot for a fast first paint."""
+    """Warm the Karnataka board and start the recovery loop."""
     try:
-        agent_store.list_quotes(days=30)
+        await _load_prices(days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=False)
     except Exception:
-        pass
-    try:
-        await _load_prices(days=14, states=DEFAULT_STATES, force=False)
-    except Exception:
-        pass
+        _record_fetch(0, "startup fetch failed")
+    # Serverless instances are frozen between requests, so the loop only helps
+    # on long-lived hosts; there, healing happens without any user action.
+    if not os.environ.get("VERCEL"):
+        app.state.heal_task = asyncio.create_task(_self_heal_loop())

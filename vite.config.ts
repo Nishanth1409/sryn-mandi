@@ -12,7 +12,7 @@ export default defineConfig({
         name: "Sryn Areca nut's — Live Mandi",
         short_name: 'Sryn Mandi',
         description:
-          'Live arecanut mandi prices and local agent purchase averages for your place.',
+          'Exact official arecanut mandi prices browsable by every available date.',
         theme_color: '#061611',
         background_color: '#061611',
         display: 'standalone',

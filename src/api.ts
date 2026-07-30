@@ -1,6 +1,4 @@
-import type { PricesResponse } from './types'
-import type { PlaceVarietyStat, VarietyAverage } from './geo/agentRates'
-import type { VarietyBucketKey } from './geo/mandis'
+import type { AgmarknetCaptcha, AgmarknetUnlockResponse, PricesResponse } from './types'
 import { apiUrl } from './apiBase'
 
 export async function fetchPrices(options?: {
@@ -11,7 +9,7 @@ export async function fetchPrices(options?: {
   signal?: AbortSignal
 }): Promise<PricesResponse> {
   const params = new URLSearchParams()
-  params.set('days', String(options?.days ?? 14))
+  params.set('days', String(options?.days ?? 60))
   params.set('scope', options?.scope ?? 'karnataka')
   if (options?.states) params.set('states', options.states)
   if (options?.refresh) params.set('refresh', 'true')
@@ -19,6 +17,44 @@ export async function fetchPrices(options?: {
   const res = await fetch(apiUrl(`/api/prices?${params}`), { signal: options?.signal })
   if (!res.ok) {
     throw new Error(`Failed to load prices (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function fetchAgmarknetCaptcha(signal?: AbortSignal): Promise<AgmarknetCaptcha> {
+  const res = await fetch(apiUrl('/api/agmarknet/captcha'), { signal })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || `Failed to load captcha (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function unlockAgmarknetHistory(payload: {
+  captcha_key: string
+  captcha: string
+  days?: number
+  scope?: 'karnataka' | 'india'
+}): Promise<AgmarknetUnlockResponse> {
+  const res = await fetch(apiUrl('/api/agmarknet/unlock'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      captcha_key: payload.captcha_key,
+      captcha: payload.captcha,
+      days: payload.days ?? 400,
+      scope: payload.scope ?? 'karnataka',
+    }),
+  })
+  if (!res.ok) {
+    let detail = `Unlock failed (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string') detail = body.detail
+    } catch {
+      /* keep default */
+    }
+    throw new Error(detail)
   }
   return res.json()
 }
@@ -36,71 +72,5 @@ export async function fetchMarketHistory(
   if (variety) params.set('variety', variety)
   const res = await fetch(apiUrl(`/api/history?${params}`))
   if (!res.ok) throw new Error('Failed to load market history')
-  return res.json()
-}
-
-export type AgentQuotesResponse = {
-  source: string
-  note: string
-  count: number
-  averages_by_variety: Record<string, VarietyAverage>
-  stats_by_place: PlaceVarietyStat[]
-  quotes: {
-    id: string
-    variety_key: string
-    rate: number
-    district: string
-    market?: string
-    quote_date: string
-  }[]
-}
-
-export async function fetchAgentQuotes(options?: {
-  district?: string
-  market?: string
-  variety_key?: string
-  days?: number
-}): Promise<AgentQuotesResponse> {
-  const params = new URLSearchParams()
-  if (options?.district) params.set('district', options.district)
-  if (options?.market) params.set('market', options.market)
-  if (options?.variety_key) params.set('variety_key', options.variety_key)
-  params.set('days', String(options?.days ?? 30))
-  const res = await fetch(apiUrl(`/api/agent-quotes?${params}`))
-  if (!res.ok) throw new Error('Failed to load agent quotes')
-  const data = (await res.json()) as AgentQuotesResponse
-  return {
-    ...data,
-    stats_by_place: data.stats_by_place || [],
-    averages_by_variety: data.averages_by_variety || {},
-  }
-}
-
-export async function submitAgentQuote(body: {
-  variety_key: VarietyBucketKey
-  district: string
-  market?: string
-  note?: string
-  lat?: number
-  lng?: number
-  market_modal?: number
-  rate?: number
-  rate_min?: number
-  rate_max?: number
-}): Promise<{
-  ok: boolean
-  quote: { id: string; rate: number; variety_key: string }
-  quotes?: { id: string; rate: number; variety_key: string }[]
-  count?: number
-}> {
-  const res = await fetch(apiUrl('/api/agent-quotes'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail || 'Failed to save agent quote')
-  }
   return res.json()
 }
