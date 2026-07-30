@@ -23,6 +23,13 @@
     "recharts": "^3.10.1",
     "three": "^0.185.1"
   },
+  "browserslist": [
+    "chrome >= 121",
+    "firefox >= 128",
+    "safari >= 17.5",
+    "ios >= 17.5",
+    "edge >= 121"
+  ],
   "devDependencies": {
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",

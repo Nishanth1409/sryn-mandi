@@ -32,6 +32,13 @@
             document.head.appendChild(meta)
           }
           meta.setAttribute('content', theme === 'light' ? '#e8f2eb' : '#061611')
+          if (!CSS.supports('selector(::-webkit-scrollbar)')) {
+            var fx = document.createElement('style')
+            fx.textContent =
+              '*{scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) var(--scroll-track)}' +
+              'html,body{scrollbar-width:none}'
+            document.head.appendChild(fx)
+          }
           var loc = localStorage.getItem('sryn-locale')
           if (!loc) {
             var langs = navigator.languages || [navigator.language || 'en']

@@ -41,6 +41,34 @@ html[data-theme='dark'] {
   --table-featured-sticky: #1f2a14;
   --table-fade: #0b1a14;
   --table-row-hover: rgba(61, 168, 115, 0.12);
+  --tint-glow-10: rgba(61, 168, 115, 0.1);
+  --tint-glow-12: rgba(61, 168, 115, 0.12);
+  --tint-glow-14: rgba(61, 168, 115, 0.14);
+  --tint-glow-18: rgba(61, 168, 115, 0.18);
+  --tint-leaf-16: rgba(31, 107, 69, 0.16);
+  --tint-leaf-18: rgba(31, 107, 69, 0.18);
+  --tint-leaf-22: rgba(31, 107, 69, 0.22);
+  --tint-leaf-36: rgba(31, 107, 69, 0.36);
+  --tint-leaf-42: rgba(31, 107, 69, 0.42);
+  --tint-leaf-60: rgba(31, 107, 69, 0.6);
+  --tint-nut-22: rgba(196, 132, 29, 0.22);
+  --tint-nut-25: rgba(196, 132, 29, 0.25);
+  --tint-nut-30: rgba(196, 132, 29, 0.3);
+  --tint-nut-34: rgba(196, 132, 29, 0.34);
+  --border-soft: rgba(232, 242, 235, 0.12);
+  --border-hover: rgba(61, 168, 115, 0.45);
+  --border-hover-soft: rgba(61, 168, 115, 0.28);
+  --border-hover-mid: rgba(61, 168, 115, 0.35);
+  --chip-on-hover: #389f6c;
+  --gold-tint-12: rgba(201, 162, 39, 0.12);
+  --gold-border: rgba(201, 162, 39, 0.4);
+  --gold-border-soft: rgba(201, 162, 39, 0.35);
+  --panel-70: rgba(6, 22, 17, 0.55);
+  --panel-82: rgba(6, 22, 17, 0.64);
+  --picker-bg: rgba(6, 22, 17, 0.94);
+  --inset-shine: rgba(255, 255, 255, 0.22);
+  --scroll-thumb: rgba(61, 168, 115, 0.7);
+  --scroll-track: rgba(232, 242, 235, 0.08);
   color: var(--ink);
   background: var(--canopy);
   font-family: var(--font);
@@ -84,6 +112,34 @@ html[data-theme='light'] {
   --table-featured-sticky: #f7f0df;
   --table-fade: #ffffff;
   --table-row-hover: rgba(24, 116, 70, 0.08);
+  --tint-glow-10: rgba(31, 138, 82, 0.1);
+  --tint-glow-12: rgba(31, 138, 82, 0.12);
+  --tint-glow-14: rgba(31, 138, 82, 0.14);
+  --tint-glow-18: rgba(31, 138, 82, 0.18);
+  --tint-leaf-16: rgba(24, 116, 70, 0.16);
+  --tint-leaf-18: rgba(24, 116, 70, 0.18);
+  --tint-leaf-22: rgba(24, 116, 70, 0.22);
+  --tint-leaf-36: rgba(24, 116, 70, 0.36);
+  --tint-leaf-42: rgba(24, 116, 70, 0.42);
+  --tint-leaf-60: rgba(24, 116, 70, 0.6);
+  --tint-nut-22: rgba(196, 132, 29, 0.22);
+  --tint-nut-25: rgba(196, 132, 29, 0.25);
+  --tint-nut-30: rgba(196, 132, 29, 0.3);
+  --tint-nut-34: rgba(196, 132, 29, 0.34);
+  --border-soft: rgba(15, 31, 23, 0.12);
+  --border-hover: rgba(31, 138, 82, 0.45);
+  --border-hover-soft: rgba(31, 138, 82, 0.28);
+  --border-hover-mid: rgba(31, 138, 82, 0.35);
+  --chip-on-hover: #1e8750;
+  --gold-tint-12: rgba(201, 162, 39, 0.12);
+  --gold-border: rgba(201, 162, 39, 0.4);
+  --gold-border-soft: rgba(201, 162, 39, 0.35);
+  --panel-70: rgba(255, 255, 255, 0.7);
+  --panel-82: rgba(255, 255, 255, 0.82);
+  --picker-bg: rgba(255, 255, 255, 0.94);
+  --inset-shine: rgba(255, 255, 255, 0.55);
+  --scroll-thumb: rgba(31, 138, 82, 0.7);
+  --scroll-track: rgba(15, 31, 23, 0.08);
 }
 
 *,
@@ -152,13 +208,11 @@ select option {
     padding: 0.3rem;
     border: 1px solid var(--line);
     border-radius: 14px;
-    background: color-mix(in srgb, var(--canopy) 94%, transparent);
+    background: var(--picker-bg);
     -webkit-backdrop-filter: blur(22px) saturate(1.25);
     backdrop-filter: blur(22px) saturate(1.25);
     box-shadow: var(--panel-shadow);
     color: var(--ink);
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--leaf-glow) 70%, transparent) transparent;
     opacity: 0;
     transform: translateY(-0.35rem);
     transition: opacity 150ms ease, transform 190ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -166,20 +220,13 @@ select option {
   }
 
   html[data-theme='light'] ::picker(select) {
-    background: color-mix(in srgb, #ffffff 94%, transparent);
+    background: var(--picker-bg);
     border-color: rgba(15, 31, 23, 0.12);
   }
 
   select:open::picker(select) {
     opacity: 1;
     transform: none;
-  }
-
-  @starting-style {
-    select:open::picker(select) {
-      opacity: 0;
-      transform: translateY(-0.35rem);
-    }
   }
 
   select option {
@@ -198,12 +245,12 @@ select option {
 
   select option:hover,
   select option:focus {
-    background-color: color-mix(in srgb, var(--leaf-glow) 18%, transparent);
+    background-color: var(--tint-glow-18);
     color: var(--ink);
   }
 
   select option:checked {
-    background-color: color-mix(in srgb, var(--leaf) 60%, transparent);
+    background-color: var(--tint-leaf-60);
     color: var(--chip-on-ink);
   }
 
@@ -211,17 +258,6 @@ select option {
     order: 1;
     margin-inline-start: auto;
     color: var(--nut-soft);
-  }
-}
-
-/* One scrollbar treatment for every scroll area, in the site palette.
-   Firefox only: the standard properties would otherwise win in Chrome and
-   bring back native arrow buttons and square rail ends. */
-@supports not selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--leaf-glow) 70%, transparent)
-      color-mix(in srgb, var(--ink) 8%, transparent);
   }
 }
 
@@ -238,7 +274,7 @@ select option {
 }
 
 ::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  background: var(--border-soft);
   border-radius: 999px;
 }
 
@@ -268,11 +304,10 @@ select option {
   background: transparent;
 }
 
-/* The page itself never shows a scrollbar — only the rails inside sections do.
-   Wheel, touch and keyboard scrolling keep working. */
+/* Hide the page scrollbar; section rails stay visible. WebKit uses the
+   rules below; Firefox is handled in the head bootstrap script. */
 html,
 body {
-  scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
@@ -417,7 +452,7 @@ html[data-theme='light'] .scene-vignette {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: clip;
+  overflow-x: hidden;
   min-height: 0;
 }
 
@@ -484,7 +519,7 @@ html[data-theme='light'] .live {
 }
 
 .lang-field:hover {
-  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  border-color: var(--border-hover);
 }
 
 /* These pills sit flush with the shell edge, so the focus ring is drawn inside
@@ -555,7 +590,8 @@ html[data-theme='light'] .live {
 }
 
 .pref-icon--moon {
-  fill: color-mix(in srgb, currentColor 18%, transparent);
+  fill: currentColor;
+  fill-opacity: 0.18;
 }
 
 /* One round button: shows moon in dark, sun in light. Tap flips the theme. */
@@ -571,7 +607,7 @@ html[data-theme='light'] .live {
 }
 
 .theme-btn:hover {
-  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  border-color: var(--border-hover);
   color: var(--nut-soft);
 }
 
@@ -866,7 +902,7 @@ html[data-theme='light'] .hero-copy {
 .btn-gold:not(:disabled):hover {
   background: #d9a13a;
   color: var(--on-gold);
-  box-shadow: 0 12px 26px color-mix(in srgb, var(--nut) 34%, transparent);
+  box-shadow: 0 12px 26px var(--tint-nut-34);
 }
 
 .btn-ghost {
@@ -878,8 +914,8 @@ html[data-theme='light'] .hero-copy {
 }
 
 .btn-ghost:not(:disabled):hover {
-  background: color-mix(in srgb, var(--leaf-glow) 14%, var(--ghost-bg));
-  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  background: var(--tint-glow-14);
+  border-color: var(--border-hover);
 }
 
 /* ——— Content panels ——— */
@@ -920,7 +956,7 @@ html[data-theme='light'] .glass {
 
 .variety-card.glass:hover,
 .local-grade-strip.glass:hover {
-  border-color: color-mix(in srgb, var(--leaf-glow) 28%, var(--line));
+  border-color: var(--border-hover-soft);
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.32);
 }
 
@@ -983,9 +1019,9 @@ html[data-theme='light'] .glass {
 .date-picker--compact {
   margin: 0.35rem 0 0.85rem;
   padding: 0.75rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border: 1px solid var(--border-soft);
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  background: var(--panel-70);
 }
 
 .date-picker__summary {
@@ -1022,10 +1058,10 @@ html[data-theme='light'] .glass {
 .date-calendar {
   width: min(100%, 19.5rem);
   padding: 0.6rem 0.65rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border: 1px solid var(--border-soft);
   border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  background: var(--panel-82);
+  box-shadow: inset 0 1px 0 var(--inset-shine);
 }
 
 /* The calendar stays in the document flow and the section grows around it,
@@ -1089,7 +1125,7 @@ html[data-theme='light'] .glass {
 
 .date-calendar__month-toggle:hover,
 .date-calendar__month-toggle.is-active {
-  background: color-mix(in srgb, var(--leaf) 16%, transparent);
+  background: var(--tint-leaf-16);
 }
 
 .date-calendar__nav button,
@@ -1120,7 +1156,7 @@ html[data-theme='light'] .glass {
 }
 
 .date-calendar__nav > button:not(.date-calendar__month-toggle):not(:disabled):hover {
-  background: color-mix(in srgb, var(--leaf) 16%, transparent);
+  background: var(--tint-leaf-16);
 }
 
 .date-calendar__nav button:disabled {
@@ -1148,13 +1184,13 @@ html[data-theme='light'] .glass {
 
 .date-calendar__months button:not(:disabled) {
   color: var(--nut-soft);
-  background: color-mix(in srgb, var(--leaf) 18%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--leaf) 36%, transparent);
+  background: var(--tint-leaf-18);
+  box-shadow: inset 0 0 0 1px var(--tint-leaf-36);
   cursor: pointer;
 }
 
 .date-calendar__months button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--nut) 22%, transparent);
+  background: var(--tint-nut-22);
 }
 
 .date-calendar__months button.is-selected {
@@ -1185,13 +1221,13 @@ html[data-theme='light'] .glass {
 
 .date-calendar__grid button:not(:disabled) {
   color: var(--nut-soft);
-  background: color-mix(in srgb, var(--leaf) 22%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--leaf) 42%, transparent);
+  background: var(--tint-leaf-22);
+  box-shadow: inset 0 0 0 1px var(--tint-leaf-42);
   cursor: pointer;
 }
 
 .date-calendar__grid button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--nut) 25%, transparent);
+  background: var(--tint-nut-25);
   transform: translateY(-1px);
 }
 
@@ -1204,7 +1240,7 @@ html[data-theme='light'] .glass {
 .date-calendar__grid button.is-selected {
   color: var(--on-gold);
   background: var(--nut);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nut) 30%, transparent);
+  box-shadow: 0 0 0 2px var(--tint-nut-30);
 }
 
 .date-calendar__grid button:disabled {
@@ -1258,7 +1294,7 @@ html[data-theme='light'] .glass {
   height: auto;
   border-radius: 0.65rem;
   background: #e8e8e8;
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border: 1px solid var(--border-soft);
 }
 
 .history-unlock__field {
@@ -1397,8 +1433,8 @@ html[data-theme='light'] .glass {
 }
 
 .chip:not(:disabled):hover {
-  background: color-mix(in srgb, var(--leaf-glow) 12%, transparent);
-  border-color: color-mix(in srgb, var(--leaf-glow) 45%, var(--line));
+  background: var(--tint-glow-12);
+  border-color: var(--border-hover);
   color: var(--ink);
 }
 
@@ -1426,8 +1462,8 @@ html[data-theme='light'] .glass {
 }
 
 .chip.on:not(:disabled):hover {
-  background: color-mix(in srgb, var(--leaf-glow) 85%, var(--leaf));
-  border-color: color-mix(in srgb, var(--leaf-glow) 85%, var(--leaf));
+  background: var(--chip-on-hover);
+  border-color: var(--chip-on-hover);
   color: var(--chip-on-ink);
 }
 
@@ -1458,9 +1494,7 @@ html[data-theme='light'] .glass {
   display: flex;
   gap: 0.4rem;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   padding-bottom: 0.45rem;
-  overscroll-behavior-x: contain;
   scroll-behavior: smooth;
 }
 
@@ -1540,8 +1574,6 @@ html[data-theme='light'] .glass {
   padding: 0 calc(var(--space-panel-x) - 0.5rem) var(--space-panel-y);
   max-height: min(62vh, 560px);
   overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Same idea vertically: fade the rows that are cut by the top or bottom fold. */
@@ -1731,7 +1763,6 @@ html[data-theme='light'] .mandi-row.featured {
 
 .table-wrap {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   padding: 0 0.25rem 0.45rem;
   max-width: 100%;
 }
@@ -1770,8 +1801,6 @@ html[data-theme='light'] .mandi-row.featured {
   background: var(--table-surface);
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
 .table-wrap--rates::-webkit-scrollbar {
@@ -2235,13 +2264,13 @@ table.rates tr.featured td {
 }
 
 .board-date-banner.is-today {
-  border-color: color-mix(in srgb, var(--leaf-glow) 35%, var(--line));
-  background: color-mix(in srgb, var(--leaf-glow) 10%, transparent);
+  border-color: var(--border-hover-mid);
+  background: var(--tint-glow-10);
 }
 
 .board-date-banner.is-stale {
-  border-color: color-mix(in srgb, #c9a227 40%, var(--line));
-  background: color-mix(in srgb, #c9a227 12%, transparent);
+  border-color: var(--gold-border);
+  background: var(--gold-tint-12);
 }
 
 .status {
@@ -2407,8 +2436,8 @@ table.rates tr.featured td {
 }
 
 .grade-agent.has-data {
-  border-color: color-mix(in srgb, var(--leaf-glow) 35%, var(--line));
-  background: color-mix(in srgb, var(--leaf-glow) 10%, transparent);
+  border-color: var(--border-hover-mid);
+  background: var(--tint-glow-10);
 }
 
 .grade-agent.has-data strong {
@@ -2481,7 +2510,7 @@ table.rates tr.featured td {
 }
 
 .variety-card.is-stale {
-  border-color: color-mix(in srgb, #c9a227 35%, var(--line));
+  border-color: var(--gold-border-soft);
 }
 
 .lot-card__date {
