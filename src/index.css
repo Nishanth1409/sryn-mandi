@@ -104,9 +104,8 @@ body {
   background: var(--canopy);
 }
 
-/* The list a <select> pops open is painted by the OS, not by us. Declaring a
-   colour scheme is what keeps it on our palette instead of the default light
-   grey menu with a blue highlight. */
+/* Fallback for browsers that still hand the dropdown list to the OS: a colour
+   scheme and row colours are as far as styling reaches there. */
 select {
   color-scheme: dark;
 }
@@ -118,6 +117,101 @@ html[data-theme='light'] select {
 select option {
   background-color: var(--canopy);
   color: var(--ink);
+}
+
+/* Where the browser allows it, the list is ours to draw: same frosted panel,
+   rounded rows and green highlight as the rest of the site, instead of the
+   system menu with its blue selection bar. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  select::picker-icon {
+    color: var(--ink-dim);
+    font-size: 0.7em;
+    transition: transform 180ms ease;
+  }
+
+  select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  /* Rates have to stay readable, so the list is far more opaque than the
+     panels behind it — enough frost to belong, not enough to fight the text. */
+  ::picker(select) {
+    max-height: 17rem;
+    padding: 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--canopy) 94%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.25);
+    backdrop-filter: blur(22px) saturate(1.25);
+    box-shadow: var(--panel-shadow);
+    color: var(--ink);
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--leaf-glow) 70%, transparent) transparent;
+    opacity: 0;
+    transform: translateY(-0.35rem);
+    transition: opacity 150ms ease, transform 190ms cubic-bezier(0.22, 1, 0.36, 1),
+      display 190ms allow-discrete, overlay 190ms allow-discrete;
+  }
+
+  html[data-theme='light'] ::picker(select) {
+    background: color-mix(in srgb, #ffffff 94%, transparent);
+    border-color: rgba(15, 31, 23, 0.12);
+  }
+
+  select:open::picker(select) {
+    opacity: 1;
+    transform: none;
+  }
+
+  @starting-style {
+    select:open::picker(select) {
+      opacity: 0;
+      transform: translateY(-0.35rem);
+    }
+  }
+
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 10px;
+    background-color: transparent;
+    color: var(--ink);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 140ms ease, color 140ms ease;
+  }
+
+  select option:hover,
+  select option:focus {
+    background-color: color-mix(in srgb, var(--leaf-glow) 18%, transparent);
+    color: var(--ink);
+  }
+
+  select option:checked {
+    background-color: color-mix(in srgb, var(--leaf) 60%, transparent);
+    color: var(--chip-on-ink);
+  }
+
+  select option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    color: var(--nut-soft);
+  }
 }
 
 /* One scrollbar treatment for every scroll area, in the site palette.
@@ -421,6 +515,25 @@ html[data-theme='light'] .live {
   -webkit-appearance: none;
   appearance: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* The pill already draws this control, so the real select sits invisibly on
+   top of it. Opacity would dim the list it opens, so hide it with transparent
+   paint instead and let the picker inherit the site styling. */
+@supports (appearance: base-select) {
+  .lang-field__select {
+    appearance: base-select;
+    opacity: 1;
+    color: transparent;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .lang-field__select::picker-icon {
+    display: none;
+  }
 }
 
 .pref-icon,
@@ -2929,5 +3042,18 @@ table.rates tr.featured td {
   .date-calendar__grid button:not(:disabled):active,
   .date-calendar__months button:not(:disabled):active {
     transform: none;
+  }
+
+  @supports (appearance: base-select) {
+    select::picker-icon,
+    select option {
+      transition: none;
+    }
+
+    ::picker(select) {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
   }
 }
