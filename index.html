@@ -5,7 +5,6 @@
     <link rel="icon" type="image/png" href="/SRYN.png?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#061611" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Sryn Mandi" />
@@ -26,6 +25,13 @@
                 : 'dark'
           document.documentElement.setAttribute('data-theme', theme)
           document.documentElement.style.colorScheme = theme
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (!meta) {
+            meta = document.createElement('meta')
+            meta.setAttribute('name', 'theme-color')
+            document.head.appendChild(meta)
+          }
+          meta.setAttribute('content', theme === 'light' ? '#e8f2eb' : '#061611')
           var loc = localStorage.getItem('sryn-locale')
           if (!loc) {
             var langs = navigator.languages || [navigator.language || 'en']
