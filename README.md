@@ -20,7 +20,8 @@ never published a rate for a date, Sryn Mandi shows nothing there — it never i
 </div>
 
 <div align="center">
-  <img src="docs/screenshots/sryn-01-hero.png" alt="Sryn Mandi home screen" width="90%" />
+  <img src="docs/screenshots/devices-all.png" alt="Sryn Mandi on television, laptop, and phone" width="100%" />
+  <p><em>One app · three displays — television, laptop, and phone. Layout adapts to each screen.</em></p>
 </div>
 
 ---
@@ -44,17 +45,31 @@ price history you can actually read.
 - **Filter official lots** — by state, district, market, and variety (Sarakku, Bede, Rashi, Andal…).
 - **Read the price history** — a clear chart of average / highest / lowest rate per day, plus top markets.
 - **Switch language and theme** — English · ಕನ್ನಡ · हिन्दी, and light / dark, right from the header.
-- **Install it like an app** — works offline-friendly as a PWA on Android and iPhone home screens.
+- **Works on every screen** — phone, laptop, and television layouts, plus installable as a PWA.
 
 ---
 
-## See it in action
+## See it on every display
 
-|  Your place rates  |  Official mandi lots  |
+| Laptop · 1440 × 900 | Phone · 390 × 844 |
 | :---: | :---: |
-| <img src="docs/screenshots/sryn-02-place.png" alt="Your place rates by GPS or APMC" /> | <img src="docs/screenshots/sryn-03-rates.png" alt="Official mandi lots with filters" /> |
-|  **Price history chart**  |  **Full Kannada + light theme**  |
-| <img src="docs/screenshots/sryn-04-history.png" alt="Variety history chart" /> | <img src="docs/screenshots/sryn-05-light-kn.png" alt="Light theme in Kannada" /> |
+| <img src="docs/screenshots/device-laptop.png" alt="Sryn Mandi on a laptop" /> | <img src="docs/screenshots/device-phone.png" alt="Sryn Mandi on a phone" /> |
+
+<div align="center">
+
+### Television · 1920 × 1080
+
+<img src="docs/screenshots/device-tv.png" alt="Sryn Mandi on a television" width="92%" />
+
+</div>
+
+<div align="center">
+
+### Also in ಕನ್ನಡ · light theme
+
+<img src="docs/screenshots/sryn-05-light-kn.png" alt="Sryn Mandi in Kannada light theme" width="88%" />
+
+</div>
 
 ---
 

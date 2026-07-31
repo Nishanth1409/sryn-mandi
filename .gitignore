@@ -39,5 +39,8 @@ venv/
 backend/data/*.json
 !backend/data/.gitkeep
 
+# Local mockup studio (used only to regenerate README device shots)
+public/mockup/
+
 .vercel
 .env*
