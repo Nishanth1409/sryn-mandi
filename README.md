@@ -65,11 +65,44 @@ price history you can actually read.
 
 <div align="center">
 
-### Also in ಕನ್ನಡ · light theme
+### Light theme
 
-<img src="docs/screenshots/sryn-05-light-kn.png" alt="Sryn Mandi in Kannada light theme" width="88%" />
+<img src="docs/screenshots/theme-light.png" alt="Sryn Mandi in light theme" width="92%" />
 
 </div>
+
+---
+
+## Every feature, one by one
+
+### 1 · Your place rates (GPS or APMC)
+
+Detects your location, or pick any APMC. Each arecanut grade — Sarakku, Bede, Rashi, Andal — gets its
+own card with the exact official lot for the selected date.
+
+<img src="docs/screenshots/feature-place-rates.png" alt="Your place rates feature" width="100%" />
+
+### 2 · Official mandi rates with live filters
+
+Every official lot for the chosen date. Filter by **state**, **district**, **market**, and **variety**,
+or search by name. Each card shows the price range, modal rate, and the day-over-day trend.
+
+<img src="docs/screenshots/feature-official-rates.png" alt="Official mandi rates with filters" width="100%" />
+
+### 3 · Variety price history
+
+A clear daily chart — average, highest, and lowest official rate per day — for the place and variety you
+pick, with the top markets alongside.
+
+<img src="docs/screenshots/feature-history.png" alt="Variety price history chart" width="100%" />
+
+### 4 · Full localisation — English · ಕನ್ನಡ · हिन्दी
+
+Every label, heading, and message is translated. The live data stays identical across languages.
+
+| ಕನ್ನಡ (Kannada) | हिन्दी (Hindi) |
+| :---: | :---: |
+| <img src="docs/screenshots/lang-kannada.png" alt="Sryn Mandi fully in Kannada" /> | <img src="docs/screenshots/lang-hindi.png" alt="Sryn Mandi fully in Hindi" /> |
 
 ---
 
