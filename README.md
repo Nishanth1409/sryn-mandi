@@ -215,18 +215,23 @@ The project ships with configs for two setups:
 
 ---
 
-## Data & credits
+## Live & credits
 
-- Rates: **AGMARKNET** (Directorate of Marketing & Inspection) and **data.gov.in**.
-- Prices are shown in **₹ per quintal (100 kg)**, exactly as published.
-- This is an independent tool and is not affiliated with any government body.
+| | |
+| :--- | :--- |
+| **Live** | [sryn-mandi.vercel.app](https://sryn-mandi.vercel.app) |
+| **Author** | [Nishanth K R](https://github.com/Nishanth1409) |
+| **Portfolio** | [nkrportfolio.vercel.app](https://nkrportfolio.vercel.app) |
+
+**Data sources:** AGMARKNET (Directorate of Marketing & Inspection) and data.gov.in. Prices are ₹ per quintal as published. Independent tool — not affiliated with any government body.
 
 ---
 
 <div align="center">
 
-Made with care by **Nishanth K R** — *son of a farmer, always a farmer.*
+*Son of a farmer · always a farmer.*
 
-[Portfolio](https://nkrportfolio.vercel.app) · [GitHub](https://github.com/Nishanth1409)
+[GitHub](https://github.com/Nishanth1409) · [Portfolio](https://nkrportfolio.vercel.app)
 
 </div>
+
