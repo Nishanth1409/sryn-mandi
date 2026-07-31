@@ -27,7 +27,7 @@ const en = {
   themeLight: 'Light',
   themeDark: 'Dark',
   browseByDate: 'Rates by available date',
-  availableDateCount: '{n} dates available from the official feed',
+  availableDateCount: '{n} {n?date|dates} available from the official feed',
   previousMonth: 'Previous month',
   nextMonth: 'Next month',
   previousYear: 'Previous year',
@@ -46,8 +46,8 @@ const en = {
   districtAverage: 'District average',
   peak: 'Peak',
   floor: 'Floor',
-  marketsCount: '{n} markets',
-  varietiesCount: '{n} varieties',
+  marketsCount: '{n} {n?market|markets}',
+  varietiesCount: '{n} {n?variety|varieties}',
   pulseLeaders: 'Variety history',
   pulseLeadersBody: 'Official daily modal aggregates from the loaded date range.',
   pulseLeadersPlaceBody: 'Official daily history for {place}, filtered by the variety you pick.',
@@ -76,10 +76,10 @@ const en = {
     'The green line is the average official rate on each day. The dotted lines are the highest and lowest rate posted that day. A rising line means the rate is going up.',
   chartUnitNote: 'All rates are ₹ per quintal (100 kg)',
   chartSelectedDay: 'Date you picked',
-  chartDaysShown: '{n} days with official rates',
+  chartDaysShown: '{n} {n?day|days} with official rates',
   chartLotOnDay: '{n} official lot that day',
   chartLotsOnDay: '{n} official lots that day',
-  daysCount: '{n} days',
+  daysCount: '{n} {n?day|days}',
   topForVariety: 'Top markets · {variety}',
   topAllMarkets: 'Top markets',
   shivamogga: 'Shivamogga',
@@ -89,7 +89,7 @@ const en = {
   updating: 'Updating…',
   boardDateLive: 'Rate date · {date} (today)',
   boardDateLatest: 'Rate date · {date}',
-  compactLots: '{n} lots',
+  compactLots: '{n} {n?lot|lots}',
   focusArecaBelt: 'Arecanut India',
   focusKarnataka: 'Karnataka',
   focusShivamogga: 'Shivamogga',
@@ -160,7 +160,8 @@ const kn: Record<MessageKey, string> = {
   heroBody: 'ಲಭ್ಯವಿರುವ ಪ್ರತಿಯೊಂದು ದಿನಾಂಕದ ನಿಖರ ಅಧಿಕೃತ ಅಡಿಕೆ ಮಾರುಕಟ್ಟೆ ಲಾಟ್‌ಗಳನ್ನು ನೋಡಿ. ಇಲ್ಲದ ದಿನಾಂಕ ಅಥವಾ ದರ ಸೇರಿಸಲಾಗುವುದಿಲ್ಲ.',
   myPlaceRates: 'ನನ್ನ ಸ್ಥಳದ ದರಗಳು', syncMarkets: 'ಮಾರುಕಟ್ಟೆ ಸಿಂಕ್', syncing: 'ಸಿಂಕ್ ಆಗುತ್ತಿದೆ…',
   language: 'ಭಾಷೆ', theme: 'ಥೀಮ್', themeLight: 'ಲೈಟ್', themeDark: 'ಡಾರ್ಕ್',
-  browseByDate: 'ಲಭ್ಯ ದಿನಾಂಕದ ದರಗಳು', availableDateCount: 'ಅಧಿಕೃತ ಫೀಡ್‌ನಲ್ಲಿ {n} ದಿನಾಂಕಗಳು ಲಭ್ಯ',
+  browseByDate: 'ಲಭ್ಯ ದಿನಾಂಕದ ದರಗಳು',
+  availableDateCount: 'ಅಧಿಕೃತ ಫೀಡ್‌ನಲ್ಲಿ {n} {n?ದಿನಾಂಕ|ದಿನಾಂಕಗಳು} ಲಭ್ಯ',
   previousMonth: 'ಹಿಂದಿನ ತಿಂಗಳು', nextMonth: 'ಮುಂದಿನ ತಿಂಗಳು',
   previousYear: 'ಹಿಂದಿನ ವರ್ಷ', nextYear: 'ಮುಂದಿನ ವರ್ಷ',
   selectMonth: 'ತಿಂಗಳು ಆಯ್ಕೆಮಾಡಿ',
@@ -169,7 +170,7 @@ const kn: Record<MessageKey, string> = {
   placeRateDate: 'ಈ ಸ್ಥಳದ ದರ ದಿನಾಂಕ', mandiRateDate: 'ಅಧಿಕೃತ ದರ ದಿನಾಂಕ',
   calendarAvailableHint: 'ಗುರುತಿಸಿದ ದಿನಾಂಕಗಳಲ್ಲಿ ಅಧಿಕೃತ ದರಗಳಿವೆ. ಲಭ್ಯವಿಲ್ಲದ ದಿನಾಂಕಗಳನ್ನು ಆಯ್ಕೆಮಾಡಲು ಸಾಧ್ಯವಿಲ್ಲ.',
   avgModal: 'ಸರಾಸರಿ ಮಾಡಲ್', asOf: 'ಲೈವ್ · {date}', ratesAsOf: '{date} ರ ದರಗಳು', ratesAsOfStale: '{date} ರ ಅಧಿಕೃತ ದರಗಳು',
-  districtAverage: 'ಜಿಲ್ಲಾ ಸರಾಸರಿ', peak: 'ಗರಿಷ್ಠ', floor: 'ಕನಿಷ್ಠ', marketsCount: '{n} ಮಾರುಕಟ್ಟೆಗಳು', varietiesCount: '{n} ವಿಧಗಳು',
+  districtAverage: 'ಜಿಲ್ಲಾ ಸರಾಸರಿ', peak: 'ಗರಿಷ್ಠ', floor: 'ಕನಿಷ್ಠ',   marketsCount: '{n} {n?ಮಾರುಕಟ್ಟೆ|ಮಾರುಕಟ್ಟೆಗಳು}', varietiesCount: '{n} {n?ವಿಧ|ವಿಧಗಳು}',
   pulseLeaders: 'ವಿಧದ ಇತಿಹಾಸ', pulseLeadersBody: 'ಲೋಡ್ ಮಾಡಿದ ದಿನಾಂಕ ವ್ಯಾಪ್ತಿಯ ಅಧಿಕೃತ ದೈನಂದಿನ ಮಾಡಲ್ ಸರಾಸರಿ.',
   pulseLeadersPlaceBody: '{place} ಗೆ ಅಧಿಕೃತ ದೈನಂದಿನ ಇತಿಹಾಸ, ನೀವು ಆಯ್ಕೆಮಾಡಿದ ವಿಧದಂತೆ.',
   pulseLeadersNeedPlace: 'ಆ ಸ್ಥಳದ ವಿಧದ ಇತಿಹಾಸ ನೋಡಲು ಮೇಲೆ GPS ಸ್ಥಳ ಅಥವಾ APMC ಆಯ್ಕೆಮಾಡಿ.',
@@ -189,14 +190,14 @@ const kn: Record<MessageKey, string> = {
     'ಹಸಿರು ಗೆರೆ ಪ್ರತಿ ದಿನದ ಅಧಿಕೃತ ಸರಾಸರಿ ದರ. ಚುಕ್ಕೆ ಗೆರೆಗಳು ಆ ದಿನದ ಗರಿಷ್ಠ ಮತ್ತು ಕನಿಷ್ಠ ದರ. ಗೆರೆ ಮೇಲೇರಿದರೆ ದರ ಏರುತ್ತಿದೆ ಎಂದರ್ಥ.',
   chartUnitNote: 'ಎಲ್ಲಾ ದರಗಳು ₹ ಪ್ರತಿ ಕ್ವಿಂಟಲ್‌ಗೆ (100 ಕೆ.ಜಿ)',
   chartSelectedDay: 'ನೀವು ಆಯ್ಕೆ ಮಾಡಿದ ದಿನಾಂಕ',
-  chartDaysShown: 'ಅಧಿಕೃತ ದರವಿರುವ {n} ದಿನಗಳು',
+  chartDaysShown: 'ಅಧಿಕೃತ ದರವಿರುವ {n} {n?ದಿನ|ದಿನಗಳು}',
   chartLotOnDay: 'ಆ ದಿನ {n} ಅಧಿಕೃತ ಲಾಟ್',
   chartLotsOnDay: 'ಆ ದಿನ {n} ಅಧಿಕೃತ ಲಾಟ್‌ಗಳು',
-  daysCount: '{n} ದಿನ',
+  daysCount: '{n} {n?ದಿನ|ದಿನಗಳು}',
   topForVariety: 'ಮುಂಚೂಣಿ ಮಾರುಕಟ್ಟೆಗಳು · {variety}', topAllMarkets: 'ಮುಂಚೂಣಿ ಮಾರುಕಟ್ಟೆಗಳು', shivamogga: 'ಶಿವಮೊಗ್ಗ',
   liveMandiBoard: 'ಅಧಿಕೃತ ಮಂಡಿ ದರಗಳು', liveMandiBody: 'ಲಭ್ಯ ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ, ನಂತರ ನಿಖರ APMC ಲಾಟ್‌ಗಳನ್ನು ಫಿಲ್ಟರ್ ಮಾಡಿ.',
   refresh: 'ರಿಫ್ರೆಶ್', updating: 'ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ…', boardDateLive: 'ದರ ದಿನಾಂಕ · {date} (ಇಂದು)', boardDateLatest: 'ದರ ದಿನಾಂಕ · {date}',
-  compactLots: '{n} ಲಾಟ್‌ಗಳು', focusArecaBelt: 'ಅಡಿಕೆ ಭಾರತ', focusKarnataka: 'ಕರ್ನಾಟಕ', focusShivamogga: 'ಶಿವಮೊಗ್ಗ',
+  compactLots: '{n} {n?ಲಾಟ್|ಲಾಟ್‌ಗಳು}', focusArecaBelt: 'ಅಡಿಕೆ ಭಾರತ', focusKarnataka: 'ಕರ್ನಾಟಕ', focusShivamogga: 'ಶಿವಮೊಗ್ಗ',
   pickState: 'ರಾಜ್ಯ', pickDistrict: 'ಜಿಲ್ಲೆ', allDistricts: 'ಎಲ್ಲಾ ಜಿಲ್ಲೆಗಳು', syncedAt: 'ಸಿಂಕ್ {time}', all: 'ಎಲ್ಲಾ',
   search: 'ಹುಡುಕಿ', searchPlaceholder: 'ಮಾರುಕಟ್ಟೆ ಅಥವಾ ವಿಧ…', variety: 'ವಿಧ', clear: 'ತೆರವುಗೊಳಿಸಿ',
   noMatches: 'ಈ ಫಿಲ್ಟರ್‌ಗಳಿಗೆ ಅಧಿಕೃತ ಲಾಟ್‌ಗಳಿಲ್ಲ.', modal: 'ಮಾಡಲ್', min: 'ಕನಿಷ್ಠ', max: 'ಗರಿಷ್ಠ', rateDate: 'ದರ ದಿನಾಂಕ',
@@ -233,7 +234,8 @@ const hi: Record<MessageKey, string> = {
   heroBody: 'हर उपलब्ध तारीख के सही आधिकारिक सुपारी बाज़ार लॉट देखें। ग़ायब तारीख या कीमत कभी नहीं भरी जाती।',
   myPlaceRates: 'मेरे स्थान की दरें', syncMarkets: 'बाज़ार सिंक', syncing: 'सिंक हो रहा है…',
   language: 'भाषा', theme: 'थीम', themeLight: 'लाइट', themeDark: 'डार्क',
-  browseByDate: 'उपलब्ध तारीख की दरें', availableDateCount: 'आधिकारिक फ़ीड में {n} तारीखें उपलब्ध',
+  browseByDate: 'उपलब्ध तारीख की दरें',
+  availableDateCount: 'आधिकारिक फ़ीड में {n} {n?तारीख|तारीखें} उपलब्ध',
   previousMonth: 'पिछला महीना', nextMonth: 'अगला महीना',
   previousYear: 'पिछला वर्ष', nextYear: 'अगला वर्ष',
   selectMonth: 'महीना चुनें',
@@ -242,7 +244,7 @@ const hi: Record<MessageKey, string> = {
   placeRateDate: 'इस स्थान की दर तारीख', mandiRateDate: 'आधिकारिक दर तारीख',
   calendarAvailableHint: 'चिह्नित तारीखों में आधिकारिक दरें हैं। अनुपलब्ध तारीखें नहीं चुनी जा सकतीं.',
   avgModal: 'औसत मोडल', asOf: 'लाइव · {date}', ratesAsOf: '{date} की दरें', ratesAsOfStale: '{date} की आधिकारिक दरें',
-  districtAverage: 'ज़िला औसत', peak: 'उच्चतम', floor: 'न्यूनतम', marketsCount: '{n} बाज़ार', varietiesCount: '{n} किस्में',
+  districtAverage: 'ज़िला औसत', peak: 'उच्चतम', floor: 'न्यूनतम',   marketsCount: '{n} बाज़ार', varietiesCount: '{n} {n?किस्म|किस्में}',
   pulseLeaders: 'किस्म का इतिहास', pulseLeadersBody: 'लोड की गई तारीख सीमा के आधिकारिक दैनिक मोडल औसत.',
   pulseLeadersPlaceBody: '{place} का आधिकारिक दैनिक इतिहास, चुनी किस्म के अनुसार.',
   pulseLeadersNeedPlace: 'उस स्थान का किस्म इतिहास देखने के लिए ऊपर GPS स्थान या APMC चुनें.',
@@ -313,7 +315,13 @@ export function detectDeviceLocale(): Locale {
 
 export function formatMessage(template: string, vars?: Record<string, string | number>): string {
   if (!vars) return template
-  return template.replace(/\{(\w+)\}/g, (_, key: string) =>
-    vars[key] != null ? String(vars[key]) : `{${key}}`,
-  )
+  // {n?singular|plural} picks a word based on the count, so "1 dates" can never render.
+  const n = Number(vars.n)
+  return template
+    .replace(/\{n\?([^|{}]*)\|([^|{}]*)\}/g, (_, one: string, many: string) =>
+      n === 1 ? one : many,
+    )
+    .replace(/\{(\w+)\}/g, (_, key: string) =>
+      vars[key] != null ? String(vars[key]) : `{${key}}`,
+    )
 }
