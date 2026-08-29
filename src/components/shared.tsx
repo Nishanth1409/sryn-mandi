@@ -1,4 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import type { PriceRecord } from '../types'
 
 export function formatINR(value: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -171,6 +172,33 @@ export function uniqueArrivalDates(rows: { arrival_date: string }[]): string[] {
     dates.push(r.arrival_date)
   }
   return dates.sort((a, b) => arrivalSortKey(b) - arrivalSortKey(a))
+}
+
+function normalizeDistrictName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/** Match official lots for one district (handles Shimoga/Shivamogga spelling). */
+export function filterDistrictRecords(records: PriceRecord[], district: string): PriceRecord[] {
+  const needle = normalizeDistrictName(district)
+  return records.filter((record) => {
+    const value = normalizeDistrictName(record.district)
+    if (value.includes(needle) || needle.includes(value)) return true
+    return (
+      district === 'Shivamogga' && (value.includes('shimoga') || Boolean(record.is_shivamogga))
+    )
+  })
+}
+
+export function districtModalAverage(
+  records: PriceRecord[],
+  district: string,
+): number | null {
+  const modals = filterDistrictRecords(records, district)
+    .map((record) => record.modal_price)
+    .filter((price) => price > 0)
+  if (!modals.length) return null
+  return Math.round((modals.reduce((sum, price) => sum + price, 0) / modals.length) * 100) / 100
 }
 
 export function TrendDelta({

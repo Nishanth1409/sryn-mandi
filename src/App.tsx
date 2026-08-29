@@ -245,7 +245,16 @@ export default function App() {
             }}
           />
 
-          {boardSummary ? <StatsStrip summary={boardSummary} boardDate={boardDate} /> : null}
+          {boardSummary ? (
+            <StatsStrip
+              summary={boardSummary}
+              boardDate={boardDate}
+              boardRecords={boardRecords}
+              geoStatus={geoStatus}
+              place={place}
+              onRequestLocation={locate}
+            />
+          ) : null}
 
           {loading && !data ? (
             <div className="shell glass loading">{t('growingPlantation')}</div>

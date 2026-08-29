@@ -13,6 +13,7 @@ import { usePrefs } from '../i18n/PrefsContext'
 import type { HistoryPoint, PriceRecord, SummaryStats, TopMarket } from '../types'
 import {
   arrivalSortKey,
+  districtModalAverage,
   formatCompact,
   formatINR,
   isBoardDateToday,
@@ -27,9 +28,10 @@ import {
   type MandiPoint,
   type VarietyBucketKey,
 } from '../geo/mandis'
-import type { DevicePlace } from '../hooks/useDevicePlace'
+import type { DevicePlace, GeoStatus } from '../hooks/useDevicePlace'
 import { filterPlaceRecords } from './LocalPlacePanel'
 import { AvailableDateCalendar } from './AvailableDateCalendar'
+import { filterDistrictRecords } from './shared'
 
 export type FiltersState = {
   query: string
@@ -50,21 +52,6 @@ type ChartPoint = HistoryPoint & { label: string; full: string }
 type HistoryScope =
   | { kind: 'mandi'; mandi: MandiPoint; label: string }
   | { kind: 'district'; district: string; label: string }
-
-function normalizeName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-function filterDistrictRecords(records: PriceRecord[], district: string): PriceRecord[] {
-  const needle = normalizeName(district)
-  return records.filter((record) => {
-    const value = normalizeName(record.district)
-    if (value.includes(needle) || needle.includes(value)) return true
-    return (
-      district === 'Shivamogga' && (value.includes('shimoga') || Boolean(record.is_shivamogga))
-    )
-  })
-}
 
 function scopeRecords(records: PriceRecord[], scope: HistoryScope | null): PriceRecord[] {
   if (!scope) return []
@@ -171,9 +158,17 @@ export function HeroOverlay({
 export function StatsStrip({
   summary,
   boardDate,
+  boardRecords,
+  geoStatus,
+  place,
+  onRequestLocation,
 }: {
   summary: SummaryStats
   boardDate?: string | null
+  boardRecords: PriceRecord[]
+  geoStatus: GeoStatus
+  place: DevicePlace | null
+  onRequestLocation?: () => void
 }) {
   const { t } = usePrefs()
   const liveDate = boardDate || summary.latest_date
@@ -184,36 +179,90 @@ export function StatsStrip({
       : t('ratesAsOf', { date: liveDate })
     : t('noOfficialRates')
 
+  const districtStat = useMemo(() => {
+    if (geoStatus === 'locating' || geoStatus === 'idle') {
+      return {
+        label: t('yourDistrict'),
+        value: '…',
+        hint: t('detectingLocation'),
+        tone: 'pending' as const,
+      }
+    }
+    if (geoStatus === 'denied' || geoStatus === 'unsupported') {
+      return {
+        label: t('yourDistrict'),
+        value: '—',
+        hint: t('districtAverageNeedsLocation'),
+        tone: 'muted' as const,
+        action: onRequestLocation,
+      }
+    }
+    if (geoStatus === 'error') {
+      return {
+        label: t('yourDistrict'),
+        value: '—',
+        hint: t('allowLocationRetry'),
+        tone: 'muted' as const,
+        action: onRequestLocation,
+      }
+    }
+    const district = place?.mandi.district
+    if (!district) {
+      return {
+        label: t('yourDistrict'),
+        value: '—',
+        hint: t('districtAverageNeedsLocation'),
+        tone: 'muted' as const,
+        action: onRequestLocation,
+      }
+    }
+    const avg = districtModalAverage(boardRecords, district)
+    return {
+      label: district,
+      value: avg ? formatINR(avg) : '—',
+      hint: t('districtAverage'),
+      tone: avg ? ('live' as const) : ('muted' as const),
+    }
+  }, [boardRecords, geoStatus, onRequestLocation, place, t])
+
   const items = [
     {
       label: t('avgModal'),
       value: formatINR(summary.avg_modal),
       hint: dateHint,
+      tone: 'default' as const,
     },
-    {
-      label: t('shivamogga'),
-      value: summary.shivamogga_avg ? formatINR(summary.shivamogga_avg) : '—',
-      hint: t('districtAverage'),
-    },
+    districtStat,
     {
       label: t('peak'),
       value: formatINR(summary.highest),
       hint: t('marketsCount', { n: summary.markets }),
+      tone: 'default' as const,
     },
     {
       label: t('floor'),
       value: formatINR(summary.lowest),
       hint: t('varietiesCount', { n: summary.varieties }),
+      tone: 'default' as const,
     },
   ]
 
   return (
     <div className="shell stats">
       {items.map((item) => (
-        <article className="glass stat" key={item.label}>
+        <article
+          className={`glass stat stat--${item.tone}`}
+          key={item.label}
+        >
           <label>{item.label}</label>
           <strong>{item.value}</strong>
-          <span>{item.hint}</span>
+          {'action' in item && item.action ? (
+            <button className="stat__link" type="button" onClick={item.action}>
+              {item.hint}
+            </button>
+          ) : (
+            <span>{item.hint}</span>
+          )}
         </article>
       ))}
     </div>
