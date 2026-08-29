@@ -252,6 +252,7 @@ export default function App() {
               boardRecords={boardRecords}
               geoStatus={geoStatus}
               place={place}
+              activePlace={activePlace}
               onRequestLocation={locate}
             />
           ) : null}

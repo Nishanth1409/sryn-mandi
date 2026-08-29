@@ -161,6 +161,7 @@ export function StatsStrip({
   boardRecords,
   geoStatus,
   place,
+  activePlace,
   onRequestLocation,
 }: {
   summary: SummaryStats
@@ -168,6 +169,7 @@ export function StatsStrip({
   boardRecords: PriceRecord[]
   geoStatus: GeoStatus
   place: DevicePlace | null
+  activePlace?: DevicePlace | null
   onRequestLocation?: () => void
 }) {
   const { t } = usePrefs()
@@ -180,6 +182,17 @@ export function StatsStrip({
     : t('noOfficialRates')
 
   const districtStat = useMemo(() => {
+    const referencePlace = activePlace ?? place
+    const district = referencePlace?.mandi.district
+    if (district) {
+      const avg = districtModalAverage(boardRecords, district)
+      return {
+        label: district,
+        value: avg ? formatINR(avg) : '—',
+        hint: t('districtAverage'),
+        tone: avg ? ('live' as const) : ('muted' as const),
+      }
+    }
     if (geoStatus === 'locating' || geoStatus === 'idle') {
       return {
         label: t('yourDistrict'),
@@ -206,24 +219,14 @@ export function StatsStrip({
         action: onRequestLocation,
       }
     }
-    const district = place?.mandi.district
-    if (!district) {
-      return {
-        label: t('yourDistrict'),
-        value: '—',
-        hint: t('districtAverageNeedsLocation'),
-        tone: 'muted' as const,
-        action: onRequestLocation,
-      }
-    }
-    const avg = districtModalAverage(boardRecords, district)
     return {
-      label: district,
-      value: avg ? formatINR(avg) : '—',
-      hint: t('districtAverage'),
-      tone: avg ? ('live' as const) : ('muted' as const),
+      label: t('yourDistrict'),
+      value: '—',
+      hint: t('districtAverageNeedsLocation'),
+      tone: 'muted' as const,
+      action: onRequestLocation,
     }
-  }, [boardRecords, geoStatus, onRequestLocation, place, t])
+  }, [activePlace, boardRecords, geoStatus, onRequestLocation, place, t])
 
   const items = [
     {
