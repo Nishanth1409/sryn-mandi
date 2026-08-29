@@ -25,9 +25,12 @@ ARCHIVE_PATH = Path(
         else Path(__file__).resolve().parent / "data" / "market_archive.json"
     )
 )
+SEED_ARCHIVE_PATH = Path(__file__).resolve().parent / "data" / "market_archive.seed.json"
 
 MAX_AGE_DAYS = 400
 MAX_ROWS = 60_000
+# Below this many distinct official dates we still ask for a captcha unlock.
+MIN_ADEQUATE_DATES = 7
 
 _ROW_FIELDS = (
     "state",
@@ -100,8 +103,58 @@ def _load_locked() -> dict[str, dict[str, Any]]:
                         loaded[signature] = cleaned
     except (OSError, ValueError):
         loaded = {}
-    _rows = loaded
+    if not loaded:
+        loaded = _load_seed_locked()
+        if loaded:
+            _rows = _prune_locked(loaded)
+            _save_locked(_rows)
+    else:
+        _rows = loaded
     return _rows
+
+
+def _load_seed_locked() -> dict[str, dict[str, Any]]:
+    """Bundled official history used on cold serverless starts."""
+    if not SEED_ARCHIVE_PATH.exists():
+        return {}
+    loaded: dict[str, dict[str, Any]] = {}
+    try:
+        payload = json.loads(SEED_ARCHIVE_PATH.read_text(encoding="utf-8"))
+        stored = payload.get("rows")
+        if isinstance(stored, list):
+            for row in stored:
+                if not isinstance(row, dict):
+                    continue
+                cleaned = _clean(row)
+                signature = row_key(row) if cleaned else None
+                if cleaned and signature:
+                    loaded[signature] = cleaned
+    except (OSError, ValueError):
+        return {}
+    return loaded
+
+
+def ensure_seeded() -> dict[str, Any]:
+    """Load archive from disk or bundled seed before the first request."""
+    with _lock:
+        rows = _load_locked()
+        return stats_from_rows(rows)
+
+
+def is_adequate(min_dates: int = MIN_ADEQUATE_DATES) -> bool:
+    with _lock:
+        return len({row["arrival_date"] for row in _load_locked().values()}) >= min_dates
+
+
+def stats_from_rows(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    days = sorted({row["arrival_date"] for row in rows.values()})
+    ordered = sorted(days, key=lambda value: parse_date(value) or date.min)
+    return {
+        "rows": len(rows),
+        "dates": len(ordered),
+        "earliest_date": ordered[0] if ordered else None,
+        "latest_date": ordered[-1] if ordered else None,
+    }
 
 
 def _prune_locked(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -168,12 +221,4 @@ def rows_since(cutoff: date) -> list[dict[str, Any]]:
 
 def stats() -> dict[str, Any]:
     with _lock:
-        rows = _load_locked()
-        days = sorted({row["arrival_date"] for row in rows.values()})
-        ordered = sorted(days, key=lambda value: parse_date(value) or date.min)
-        return {
-            "rows": len(rows),
-            "dates": len(ordered),
-            "earliest_date": ordered[0] if ordered else None,
-            "latest_date": ordered[-1] if ordered else None,
-        }
+        return stats_from_rows(_load_locked())

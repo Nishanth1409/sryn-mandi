@@ -125,6 +125,7 @@ def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
             "last_error": _health["last_error"],
             "sources": dict(_health["sources"]),
         }
+    archive_stats = archive.stats()
     if fresh_rows > 0:
         state = "live"
     elif served_rows > 0:
@@ -132,17 +133,21 @@ def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
     else:
         state = "unavailable"
     agmarknet_status = str(snapshot["sources"].get("agmarknet") or "")
+    captcha_required = agmarknet_status == "captcha_required"
+    # Saved official history is enough — do not nag visitors for captcha again.
+    if archive.is_adequate():
+        captcha_required = False
     return {
         **snapshot,
         "state": state,
-        "captcha_required": agmarknet_status == "captcha_required",
+        "captcha_required": captcha_required,
         "agmarknet_ticket": agmarknet_access.ticket_status(),
         "last_success_at": (
             datetime.fromtimestamp(last_success).isoformat(timespec="seconds")
             if last_success
             else None
         ),
-        "archive": archive.stats(),
+        "archive": archive_stats,
     }
 
 
@@ -732,8 +737,20 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
             _cache["key"] = cache_key
         return _cached_response(disk_data, disk_at, now)
 
+    # Fast path: serve the saved official archive immediately instead of waiting
+    # on AGMARKNET (captcha) or a 40s upstream fetch on every visit.
+    if not force:
+        archived = _build_prices_from_archive(days, states)
+        if archived is not None and archived.summary.records > 0:
+            with _cache_lock:
+                _cache["data"] = archived
+                _cache["fetched_at"] = now
+                _cache["key"] = cache_key
+            _write_disk_cache(cache_key, archived, now)
+            return archived
+
     try:
-        response = await _fetch_prices_fresh(days, states)
+        response = await _fetch_prices_fresh(days, states, force=force)
     except Exception:
         # Prefer last good board over a hard failure (cold start / upstream outage)
         if disk_data is not None and disk_data.summary.records > 0 and now - disk_at < STALE_TTL_SECONDS:
@@ -773,6 +790,61 @@ def _merge_rows(stored: list[dict], fresh: list[dict]) -> list[dict]:
         if key:
             merged[key] = row
     return list(merged.values())
+
+
+def _filter_rows_by_states(rows: list[dict], states: list[str]) -> list[dict]:
+    if len(states) >= len(ALL_INDIA_STATES):
+        return rows
+    wanted = {state.strip().lower() for state in states if state.strip()}
+    if not wanted:
+        return rows
+    filtered: list[dict] = []
+    for row in rows:
+        state_name = str(row.get("state") or "").strip().lower()
+        if state_name in wanted or any(token in state_name for token in wanted):
+            filtered.append(row)
+    return filtered or rows
+
+
+def _build_prices_response(
+    raw: list[dict],
+    *,
+    days: int,
+    fresh_rows: int = 0,
+    source: str | None = None,
+) -> PricesResponse:
+    serve_days = min(max(days, 7), MAX_SERVE_WINDOW_DAYS)
+    records = _normalize(raw)
+    live_day = _pick_live_day(records)
+    live_records = _filter_live_day(records, live_day) or records
+    return PricesResponse(
+        updated_at=datetime.now().isoformat(timespec="seconds"),
+        source=source or "AGMARKNET archive + data.gov.in",
+        cache_age_seconds=0,
+        summary=_summary(live_records),
+        records=records,
+        board_date=_format_date(live_day) if live_day else None,
+        available_dates=_available_dates(records),
+        history=_build_history(raw, days=serve_days),
+        history_by_variety=_build_history_by_variety(raw, days=serve_days),
+        top_markets=_build_top_markets(live_records),
+        feed_health=_feed_health(fresh_rows=fresh_rows, served_rows=len(records)),
+    )
+
+
+def _build_prices_from_archive(days: int, states: list[str]) -> PricesResponse | None:
+    if not archive.is_adequate():
+        return None
+    cutoff = date.today() - timedelta(days=min(max(days, 7), MAX_SERVE_WINDOW_DAYS))
+    raw = _filter_rows_by_states(archive.rows_since(cutoff), states)
+    if not raw:
+        return None
+    return _build_prices_response(
+        raw,
+        days=days,
+        fresh_rows=0,
+        source="Saved official AGMARKNET archive",
+    )
 
 
 async def _fetch_agmarknet_rows(states: list[str], lookback: int, deadline: float) -> list[dict]:
@@ -816,22 +888,20 @@ async def _fetch_agmarknet_rows(states: list[str], lookback: int, deadline: floa
     return raw
 
 
-async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
+async def _fetch_prices_fresh(days: int, states: list[str], *, force: bool = False) -> PricesResponse:
     lookback = 7 if len(states) > 2 else min(max(days, 7), MAX_UPSTREAM_LOOKBACK_DAYS)
     budget = 55.0 if len(states) > 2 else 40.0
     hard_deadline = time.time() + budget
-    # Each source gets its own share, so a stalling AGMARKNET can never starve
-    # data.gov.in (and vice versa) into looking like "no rates today".
     agmarknet_deadline = time.time() + budget * 0.5
 
     datagov_task = asyncio.create_task(_fetch_datagovin())
 
-    fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
-    if not fresh and not _agmarknet_blocked() and time.time() < agmarknet_deadline - 5.0:
-        # Transient upstream timeouts are common; give it one more chance now
-        # instead of publishing an empty board.
-        await asyncio.sleep(1.5)
+    fresh: list[dict] = []
+    if not _agmarknet_blocked() and (force or not archive.is_adequate()):
         fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
+        if not fresh and time.time() < agmarknet_deadline - 5.0:
+            await asyncio.sleep(1.5)
+            fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
 
     try:
         fresh.extend(
@@ -848,24 +918,13 @@ async def _fetch_prices_fresh(days: int, states: list[str]) -> PricesResponse:
 
     serve_days = min(max(days, lookback), MAX_SERVE_WINDOW_DAYS)
     raw = _merge_rows(archive.rows_since(date.today() - timedelta(days=serve_days)), fresh)
+    raw = _filter_rows_by_states(raw, states)
 
-    records = _normalize(raw)
-    live_day = _pick_live_day(records)
-    live_records = _filter_live_day(records, live_day) or records
-    history = _build_history(raw, days=serve_days)
-    history_by_variety = _build_history_by_variety(raw, days=serve_days)
-    return PricesResponse(
-        updated_at=datetime.now().isoformat(timespec="seconds"),
+    return _build_prices_response(
+        raw,
+        days=days,
+        fresh_rows=len(fresh),
         source="AGMARKNET (api.agmarknet.gov.in) + data.gov.in",
-        cache_age_seconds=0,
-        summary=_summary(live_records),
-        records=records,
-        board_date=_format_date(live_day) if live_day else None,
-        available_dates=_available_dates(records),
-        history=history,
-        history_by_variety=history_by_variety,
-        top_markets=_build_top_markets(live_records),
-        feed_health=_feed_health(fresh_rows=len(fresh), served_rows=len(records)),
     )
 
 
@@ -915,7 +974,10 @@ async def agmarknet_status():
         source = _health["sources"].get("agmarknet")
         blocked_until = float(_health.get("agmarknet_blocked_until") or 0.0)
     return {
-        "captcha_required": source == "captcha_required" or time.time() < blocked_until,
+        "captcha_required": (
+            (source == "captcha_required" or time.time() < blocked_until)
+            and not archive.is_adequate()
+        ),
         "source": source,
         "ticket": agmarknet_access.ticket_status(),
         "archive": archive.stats(),
@@ -957,9 +1019,19 @@ async def agmarknet_unlock(body: AgmarknetUnlockRequest):
     _record_source("agmarknet", True)
     _record_fetch(len(rows))
     _clear_agmarknet_block()
-    _invalidate_price_cache()
 
-    prices = await _load_prices(days=body.days, states=state_list, force=True)
+    prices = _build_prices_from_archive(body.days, state_list)
+    if prices is None:
+        prices = await _load_prices(days=body.days, states=state_list, force=False)
+    else:
+        cache_key = f"dated1|{body.days}|{','.join(sorted(state_list))}"
+        now = time.time()
+        with _cache_lock:
+            _cache["data"] = prices
+            _cache["fetched_at"] = now
+            _cache["key"] = cache_key
+        _write_disk_cache(cache_key, prices, now)
+
     return {
         "ok": True,
         "added_rows": added,
@@ -1017,23 +1089,14 @@ async def get_market_history(
     variety: str | None = None,
     days: int = Query(30, ge=7, le=90),
 ):
-    data = await _load_prices(days=days, states=DEFAULT_STATES)
-    # Rebuild from cached raw via records is insufficient; use history of matching market
-    # Re-fetch focused Karnataka window if needed — use records' change path by filtering raw from cache
-    # For simplicity, derive daily series from all records matching market in full payload:
-    # We store only latest per variety; so call agmarknet again for Karnataka.
-    from_d = (date.today() - timedelta(days=days)).isoformat()
-    to_d = date.today().isoformat()
-    loop = asyncio.get_event_loop()
-    raw = await loop.run_in_executor(
-        None, _fetch_agmarknet_state, "Karnataka", from_d, to_d
-    )
+    cutoff = date.today() - timedelta(days=days)
+    raw = archive.rows_since(cutoff)
     market_l = market.lower()
     filtered = [
         r
         for r in raw
-        if market_l in r["market"].lower()
-        and (not variety or variety.lower() in r["variety"].lower())
+        if market_l in str(r.get("market") or "").lower()
+        and (not variety or variety.lower() in str(r.get("variety") or "").lower())
     ]
     buckets: dict[str, list[float]] = {}
     for row in filtered:
@@ -1056,7 +1119,7 @@ async def get_market_history(
         "market": market,
         "variety": variety,
         "series": series,
-        "source": "AGMARKNET",
+        "source": "AGMARKNET archive",
     }
 
 
@@ -1066,7 +1129,7 @@ async def _self_heal_loop() -> None:
         await asyncio.sleep(_heal_delay_seconds())
         try:
             await _load_prices(
-                days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=True
+                days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=False
             )
         except Exception:
             _record_fetch(0, "refresh attempt raised")
@@ -1074,7 +1137,8 @@ async def _self_heal_loop() -> None:
 
 @app.on_event("startup")
 async def warmup():
-    """Warm the Karnataka board and start the recovery loop."""
+    """Warm the Karnataka board from the saved archive and start recovery."""
+    archive.ensure_seeded()
     try:
         await _load_prices(days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=False)
     except Exception:

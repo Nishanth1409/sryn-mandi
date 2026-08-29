@@ -202,6 +202,8 @@ export default function App() {
     if (scope !== 'india' && explicitlyOpenedAllIndia) void load(false, 'india')
   }
 
+  const archiveDateCount = data?.feed_health?.archive?.dates ?? 0
+
   return (
     <>
       <ArakaScene />
@@ -230,11 +232,11 @@ export default function App() {
 
           <HistoryUnlockPanel
             needed={Boolean(
-              (availableDates?.length ?? 0) <= 3 &&
+              archiveDateCount <= 3 &&
                 (data?.feed_health?.captcha_required ||
                   data?.feed_health?.sources?.agmarknet === 'captcha_required'),
             )}
-            availableDateCount={availableDates?.length ?? 0}
+            availableDateCount={Math.max(availableDates?.length ?? 0, archiveDateCount)}
             onUnlocked={(prices) => {
               setData(prices)
               setSelectedDate(null)

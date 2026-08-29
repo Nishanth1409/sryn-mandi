@@ -38,6 +38,7 @@ venv/
 # Runtime market cache
 backend/data/*.json
 !backend/data/.gitkeep
+!backend/data/market_archive.seed.json
 
 # Local mockup studio (used only to regenerate README device shots)
 public/mockup/
