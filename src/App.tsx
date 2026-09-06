@@ -225,16 +225,22 @@ export default function App() {
               selectedDate={boardDate}
               onSelect={setSelectedDate}
               archivedNotice={
-                data.feed_health?.state === 'archived' ? t('archivedRatesNotice') : null
+                data.feed_health?.archive_stale
+                  ? t('staleRatesNotice', {
+                      date: data.feed_health.archive?.latest_date || boardDate || '—',
+                    })
+                  : data.feed_health?.state === 'archived'
+                    ? t('archivedRatesNotice')
+                    : null
               }
             />
           ) : null}
 
           <HistoryUnlockPanel
             needed={Boolean(
-              archiveDateCount <= 3 &&
-                (data?.feed_health?.captcha_required ||
-                  data?.feed_health?.sources?.agmarknet === 'captcha_required'),
+              data?.feed_health?.captcha_required ||
+                data?.feed_health?.archive_stale ||
+                data?.feed_health?.sources?.agmarknet === 'captcha_required',
             )}
             availableDateCount={Math.max(availableDates?.length ?? 0, archiveDateCount)}
             onUnlocked={(prices) => {

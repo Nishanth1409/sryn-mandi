@@ -31,6 +31,9 @@ MAX_AGE_DAYS = 400
 MAX_ROWS = 60_000
 # Below this many distinct official dates we still ask for a captcha unlock.
 MIN_ADEQUATE_DATES = 7
+# If the newest saved official date is older than this many calendar days,
+# treat the archive as stale and ask AGMARKNET (captcha) / data.gov.in again.
+MAX_FRESH_LAG_DAYS = 2
 
 _ROW_FIELDS = (
     "state",
@@ -146,14 +149,68 @@ def is_adequate(min_dates: int = MIN_ADEQUATE_DATES) -> bool:
         return len({row["arrival_date"] for row in _load_locked().values()}) >= min_dates
 
 
+def latest_day() -> date | None:
+    with _lock:
+        days = [
+            parse_date(row["arrival_date"])
+            for row in _load_locked().values()
+        ]
+        days = [day for day in days if day is not None]
+        return max(days) if days else None
+
+
+def days_behind(today: date | None = None) -> int | None:
+    """How many calendar days the newest saved official date lags behind today."""
+    newest = latest_day()
+    if newest is None:
+        return None
+    return max(0, ((today or date.today()) - newest).days)
+
+
+def is_stale(max_lag_days: int = MAX_FRESH_LAG_DAYS, today: date | None = None) -> bool:
+    """True when there is no archive, or the newest official date is too old."""
+    lag = days_behind(today)
+    if lag is None:
+        return True
+    return lag > max_lag_days
+
+
+def write_seed(rows: dict[str, dict[str, Any]] | None = None) -> bool:
+    """Rewrite the bundled seed so the next cold start keeps unlocked history."""
+    if rows is None:
+        with _lock:
+            payload_rows = list(_load_locked().values())
+    else:
+        payload_rows = list(rows.values())
+    if not payload_rows:
+        return False
+    try:
+        SEED_ARCHIVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = SEED_ARCHIVE_PATH.with_suffix(".tmp")
+        temp_path.write_text(
+            json.dumps({"version": 1, "rows": payload_rows}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        temp_path.replace(SEED_ARCHIVE_PATH)
+        return True
+    except OSError:
+        return False
+
+
 def stats_from_rows(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     days = sorted({row["arrival_date"] for row in rows.values()})
     ordered = sorted(days, key=lambda value: parse_date(value) or date.min)
+    newest = parse_date(ordered[-1]) if ordered else None
+    lag = None
+    if newest is not None:
+        lag = max(0, (date.today() - newest).days)
     return {
         "rows": len(rows),
         "dates": len(ordered),
         "earliest_date": ordered[0] if ordered else None,
         "latest_date": ordered[-1] if ordered else None,
+        "days_behind": lag,
+        "stale": lag is None or lag > MAX_FRESH_LAG_DAYS,
     }
 
 
@@ -207,6 +264,10 @@ def remember(rows: list[dict[str, Any]]) -> int:
         _rows = _prune_locked(current)
         if added:
             _save_locked(_rows)
+            # Keep the bundled seed in sync on writable hosts so cold starts
+            # (and the next deploy) do not fall back to an older snapshot.
+            if not os.environ.get("VERCEL"):
+                write_seed(_rows)
         return added
 
 

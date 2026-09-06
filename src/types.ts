@@ -56,6 +56,7 @@ export interface FeedHealth {
   last_success_at: string | null
   sources: Record<string, string>
   captcha_required?: boolean
+  archive_stale?: boolean
   agmarknet_ticket?: {
     active: boolean
     reason?: string
@@ -67,6 +68,8 @@ export interface FeedHealth {
     dates: number
     earliest_date: string | null
     latest_date: string | null
+    days_behind?: number | null
+    stale?: boolean
   }
 }
 

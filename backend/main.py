@@ -126,22 +126,28 @@ def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
             "sources": dict(_health["sources"]),
         }
     archive_stats = archive.stats()
-    if fresh_rows > 0:
+    stale = bool(archive_stats.get("stale"))
+    if fresh_rows > 0 and not stale:
         state = "live"
     elif served_rows > 0:
         state = "archived"
     else:
         state = "unavailable"
     agmarknet_status = str(snapshot["sources"].get("agmarknet") or "")
-    captcha_required = agmarknet_status == "captcha_required"
-    # Saved official history is enough — do not nag visitors for captcha again.
-    if archive.is_adequate():
-        captcha_required = False
+    ticket = agmarknet_access.ticket_status()
+    # Ask for captcha when history is missing OR the newest saved date is stale.
+    # A large old archive must not hide the unlock panel forever.
+    captcha_required = (
+        stale
+        or not archive.is_adequate()
+        or agmarknet_status == "captcha_required"
+    ) and not ticket.get("active")
     return {
         **snapshot,
         "state": state,
         "captcha_required": captcha_required,
-        "agmarknet_ticket": agmarknet_access.ticket_status(),
+        "archive_stale": stale,
+        "agmarknet_ticket": ticket,
         "last_success_at": (
             datetime.fromtimestamp(last_success).isoformat(timespec="seconds")
             if last_success
@@ -739,9 +745,21 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
 
     # Fast path: serve the saved official archive immediately instead of waiting
     # on AGMARKNET (captcha) or a 40s upstream fetch on every visit.
+    # When the archive is stale, still return it quickly (so the UI stays usable)
+    # and try a short data.gov.in pull for any newer official lots.
     if not force:
         archived = _build_prices_from_archive(days, states)
         if archived is not None and archived.summary.records > 0:
+            if archive.is_stale():
+                try:
+                    quick = await asyncio.wait_for(_fetch_datagovin(), timeout=8.0)
+                    if quick:
+                        archive.remember(quick)
+                        refreshed = _build_prices_from_archive(days, states)
+                        if refreshed is not None and refreshed.summary.records > 0:
+                            archived = refreshed
+                except Exception:
+                    _record_source("data.gov.in", False, "timeout")
             with _cache_lock:
                 _cache["data"] = archived
                 _cache["fetched_at"] = now
@@ -753,6 +771,9 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
         response = await _fetch_prices_fresh(days, states, force=force)
     except Exception:
         # Prefer last good board over a hard failure (cold start / upstream outage)
+        archived = _build_prices_from_archive(days, states)
+        if archived is not None and archived.summary.records > 0:
+            return archived
         if disk_data is not None and disk_data.summary.records > 0 and now - disk_at < STALE_TTL_SECONDS:
             return _cached_response(disk_data, disk_at, now)
         with _cache_lock:
@@ -767,6 +788,9 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
 
     # Never persist or prefer an empty board over a previous good one
     if response.summary.records <= 0:
+        archived = _build_prices_from_archive(days, states)
+        if archived is not None and archived.summary.records > 0:
+            return archived
         if disk_data is not None and disk_data.summary.records > 0 and now - disk_at < STALE_TTL_SECONDS:
             return _cached_response(disk_data, disk_at, now)
         if len(states) > 1:
@@ -897,7 +921,17 @@ async def _fetch_prices_fresh(days: int, states: list[str], *, force: bool = Fal
     datagov_task = asyncio.create_task(_fetch_datagovin())
 
     fresh: list[dict] = []
-    if not _agmarknet_blocked() and (force or not archive.is_adequate()):
+    ticket = agmarknet_access.ticket_status()
+    # Pull AGMARKNET when forced, archive is thin/stale, or a live ticket can
+    # page without another captcha. Skip only while a hard captcha block is set
+    # and no ticket is active.
+    should_try_agmarknet = (
+        force
+        or archive.is_stale()
+        or not archive.is_adequate()
+        or bool(ticket.get("active"))
+    )
+    if should_try_agmarknet and (not _agmarknet_blocked() or ticket.get("active")):
         fresh = await _fetch_agmarknet_rows(states, lookback, agmarknet_deadline)
         if not fresh and time.time() < agmarknet_deadline - 5.0:
             await asyncio.sleep(1.5)
@@ -973,13 +1007,16 @@ async def agmarknet_status():
     with _health_lock:
         source = _health["sources"].get("agmarknet")
         blocked_until = float(_health.get("agmarknet_blocked_until") or 0.0)
+    ticket = agmarknet_access.ticket_status()
+    stale = archive.is_stale()
     return {
         "captcha_required": (
-            (source == "captcha_required" or time.time() < blocked_until)
-            and not archive.is_adequate()
+            (stale or not archive.is_adequate() or source == "captcha_required" or time.time() < blocked_until)
+            and not ticket.get("active")
         ),
+        "archive_stale": stale,
         "source": source,
-        "ticket": agmarknet_access.ticket_status(),
+        "ticket": ticket,
         "archive": archive.stats(),
     }
 

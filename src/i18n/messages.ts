@@ -15,6 +15,8 @@ const en = {
   retryingAutomatically: 'Retrying the official sources automatically — this recovers on its own.',
   archivedRatesNotice:
     'Official sources are unreachable. Showing the exact rates already saved from them, and retrying in the background.',
+  staleRatesNotice:
+    'Saved rates stop at {date}. AGMARKNET needs a one-time captcha to load newer official dates.',
   heroKicker: 'Official AGMARKNET · exact dated rates',
   heroTitle1: 'The mandi,',
   heroTitle2: 'by date.',
@@ -135,9 +137,9 @@ const en = {
   installAndroidHint: 'Add this site to your home screen for quick access to recently loaded boards.',
   installNow: 'Install',
   installLater: 'Not now',
-  captchaTitle: 'Unlock older AGMARKNET dates',
+  captchaTitle: 'Load newer AGMARKNET rates',
   captchaBody:
-    'AGMARKNET asks for a captcha before releasing multi-day history. Solve it once here — we store only the exact official lots returned, then you can pick any available date.',
+    'AGMARKNET asks for a captcha before releasing multi-day history. Solve it once here — we store only the exact official lots returned (including dates after the saved archive), then you can pick any available date.',
   captchaShow: 'Show captcha',
   captchaLoading: 'Loading captcha…',
   captchaRefresh: 'New captcha',
@@ -159,6 +161,8 @@ const kn: Record<MessageKey, string> = {
   retryingAutomatically: 'ಅಧಿಕೃತ ಮೂಲಗಳನ್ನು ತಾನಾಗಿಯೇ ಮರುಪ್ರಯತ್ನಿಸಲಾಗುತ್ತಿದೆ — ಇದು ತಾನೇ ಸರಿಯಾಗುತ್ತದೆ.',
   archivedRatesNotice:
     'ಅಧಿಕೃತ ಮೂಲಗಳು ಸಿಗುತ್ತಿಲ್ಲ. ಅವುಗಳಿಂದ ಈಗಾಗಲೇ ಉಳಿಸಿದ ನಿಖರ ದರಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ, ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಮರುಪ್ರಯತ್ನ ನಡೆಯುತ್ತಿದೆ.',
+  staleRatesNotice:
+    'ಉಳಿಸಿದ ದರಗಳು {date} ರಲ್ಲಿ ನಿಲ್ಲುತ್ತವೆ. ಹೊಸ ಅಧಿಕೃತ ದಿನಾಂಕಗಳಿಗೆ AGMARKNET ಕ್ಯಾಪ್ಚಾ ಒಮ್ಮೆ ಬೇಕು.',
   heroKicker: 'ಅಧಿಕೃತ AGMARKNET · ನಿಖರ ದಿನಾಂಕದ ದರಗಳು', heroTitle1: 'ಮಂಡಿ,', heroTitle2: 'ದಿನಾಂಕದಂತೆ.',
   heroBody: 'ಲಭ್ಯವಿರುವ ಪ್ರತಿಯೊಂದು ದಿನಾಂಕದ ನಿಖರ ಅಧಿಕೃತ ಅಡಿಕೆ ಮಾರುಕಟ್ಟೆ ಲಾಟ್‌ಗಳನ್ನು ನೋಡಿ. ಇಲ್ಲದ ದಿನಾಂಕ ಅಥವಾ ದರ ಸೇರಿಸಲಾಗುವುದಿಲ್ಲ.',
   myPlaceRates: 'ನನ್ನ ಸ್ಥಳದ ದರಗಳು', syncMarkets: 'ಮಾರುಕಟ್ಟೆ ಸಿಂಕ್', syncing: 'ಸಿಂಕ್ ಆಗುತ್ತಿದೆ…',
@@ -216,9 +220,9 @@ const kn: Record<MessageKey, string> = {
   footer: 'AGMARKNET ಮತ್ತು data.gov.in ನ ಅಧಿಕೃತ ಅಡಿಕೆ ಮಾರುಕಟ್ಟೆ ದರಗಳು. ಆ ಮೂಲಗಳು ನೀಡಿದ ದಿನಾಂಕ ಮತ್ತು ಲಾಟ್‌ಗಳನ್ನು ಮಾತ್ರ ತೋರಿಸಲಾಗುತ್ತದೆ.',
   installApp: 'ಅಪ್ಲಿಕೇಶನ್ ಸ್ಥಾಪಿಸಿ', installAndroidHint: 'ಇತ್ತೀಚೆಗೆ ಲೋಡ್ ಮಾಡಿದ ಬೋರ್ಡ್‌ಗಳಿಗೆ ತ್ವರಿತ ಪ್ರವೇಶಕ್ಕಾಗಿ ಹೋಮ್ ಸ್ಕ್ರೀನ್‌ಗೆ ಸೇರಿಸಿ.',
   installNow: 'ಸ್ಥಾಪಿಸಿ', installLater: 'ಈಗ ಬೇಡ',
-  captchaTitle: 'ಹಳೆಯ AGMARKNET ದಿನಾಂಕಗಳನ್ನು ಅನ್‌ಲಾಕ್ ಮಾಡಿ',
+  captchaTitle: 'ಹೊಸ AGMARKNET ದರಗಳನ್ನು ಲೋಡ್ ಮಾಡಿ',
   captchaBody:
-    'ಬಹು-ದಿನಗಳ ಇತಿಹಾಸಕ್ಕೆ AGMARKNET ಕ್ಯಾಪ್ಚಾ ಕೇಳುತ್ತದೆ. ಒಮ್ಮೆ ಇಲ್ಲಿ ಬಿಡಿಸಿ — ನಾವು ಅವರು ಕಳುಹಿಸಿದ ನಿಖರ ಅಧಿಕೃತ ಲಾಟ್‌ಗಳನ್ನು ಮಾತ್ರ ಉಳಿಸುತ್ತೇವೆ, ನಂತರ ಯಾವುದೇ ಲಭ್ಯ ದಿನಾಂಕವನ್ನು ಆಯ್ಕೆಮಾಡಬಹುದು.',
+    'ಬಹು-ದಿನಗಳ ಇತಿಹಾಸಕ್ಕೆ AGMARKNET ಕ್ಯಾಪ್ಚಾ ಕೇಳುತ್ತದೆ. ಒಮ್ಮೆ ಇಲ್ಲಿ ಬಿಡಿಸಿ — ನಾವು ಅವರು ಕಳುಹಿಸಿದ ನಿಖರ ಅಧಿಕೃತ ಲಾಟ್‌ಗಳನ್ನು ಮಾತ್ರ ಉಳಿಸುತ್ತೇವೆ (ಉಳಿಸಿದ ಆರ್ಕೈವ್ ನಂತರದ ದಿನಾಂಕಗಳೂ ಸೇರಿ), ನಂತರ ಯಾವುದೇ ಲಭ್ಯ ದಿನಾಂಕವನ್ನು ಆಯ್ಕೆಮಾಡಬಹುದು.',
   captchaShow: 'ಕ್ಯಾಪ್ಚಾ ತೋರಿಸಿ', captchaLoading: 'ಕ್ಯಾಪ್ಚಾ ಲೋಡ್ ಆಗುತ್ತಿದೆ…', captchaRefresh: 'ಹೊಸ ಕ್ಯಾಪ್ಚಾ',
   captchaImageAlt: 'AGMARKNET ಕ್ಯಾಪ್ಚಾ ಅಕ್ಷರಗಳು', captchaAnswerLabel: 'ನೀವು ನೋಡುವ ಅಕ್ಷರಗಳನ್ನು ಟೈಪ್ ಮಾಡಿ',
   captchaAnswerPlaceholder: 'ಕ್ಯಾಪ್ಚಾ ಪಠ್ಯ', captchaUnlock: 'ಅಧಿಕೃತ ಇತಿಹಾಸ ಲೋಡ್ ಮಾಡಿ',
@@ -233,6 +237,8 @@ const hi: Record<MessageKey, string> = {
   retryingAutomatically: 'आधिकारिक स्रोतों को अपने आप फिर आज़माया जा रहा है — यह स्वयं ठीक हो जाएगा।',
   archivedRatesNotice:
     'आधिकारिक स्रोत उपलब्ध नहीं हैं। उनसे पहले सहेजी गई सटीक दरें दिखाई जा रही हैं, और पृष्ठभूमि में पुनः प्रयास जारी है।',
+  staleRatesNotice:
+    'सहेजी दरें {date} पर रुकती हैं। नई आधिकारिक तारीखों के लिए AGMARKNET कैप्चा एक बार चाहिए।',
   heroKicker: 'आधिकारिक AGMARKNET · सही तारीख की दरें', heroTitle1: 'मंडी,', heroTitle2: 'तारीख के अनुसार.',
   heroBody: 'हर उपलब्ध तारीख के सही आधिकारिक सुपारी बाज़ार लॉट देखें। ग़ायब तारीख या कीमत कभी नहीं भरी जाती।',
   myPlaceRates: 'मेरे स्थान की दरें', syncMarkets: 'बाज़ार सिंक', syncing: 'सिंक हो रहा है…',
@@ -290,9 +296,9 @@ const hi: Record<MessageKey, string> = {
   footer: 'AGMARKNET और data.gov.in की आधिकारिक सुपारी बाज़ार दरें। केवल उन्हीं स्रोतों से मिली तारीखें और लॉट दिखाए जाते हैं.',
   installApp: 'ऐप इंस्टॉल करें', installAndroidHint: 'हाल में लोड बोर्ड के त्वरित उपयोग के लिए होम स्क्रीन पर जोड़ें.',
   installNow: 'इंस्टॉल', installLater: 'अभी नहीं',
-  captchaTitle: 'पुरानी AGMARKNET तारीखें अनलॉक करें',
+  captchaTitle: 'नई AGMARKNET दरें लोड करें',
   captchaBody:
-    'बहु-दिवसीय इतिहास के लिए AGMARKNET कैप्चा माँगता है। इसे एक बार यहाँ हल करें — हम केवल उनके भेजे सही आधिकारिक लॉट सहेजते हैं, फिर आप कोई भी उपलब्ध तारीख चुन सकते हैं।',
+    'बहु-दिवसीय इतिहास के लिए AGMARKNET कैप्चा माँगता है। इसे एक बार यहाँ हल करें — हम केवल उनके भेजे सही आधिकारिक लॉट सहेजते हैं (सहेजे संग्रह के बाद की तारीखें भी), फिर आप कोई भी उपलब्ध तारीख चुन सकते हैं।',
   captchaShow: 'कैप्चा दिखाएँ', captchaLoading: 'कैप्चा लोड हो रहा है…', captchaRefresh: 'नया कैप्चा',
   captchaImageAlt: 'AGMARKNET कैप्चा अक्षर', captchaAnswerLabel: 'जो अक्षर दिखें उन्हें टाइप करें',
   captchaAnswerPlaceholder: 'कैप्चा टेक्स्ट', captchaUnlock: 'आधिकारिक इतिहास लोड करें',
