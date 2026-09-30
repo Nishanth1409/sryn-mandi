@@ -149,6 +149,20 @@ def is_adequate(min_dates: int = MIN_ADEQUATE_DATES) -> bool:
         return len({row["arrival_date"] for row in _load_locked().values()}) >= min_dates
 
 
+def sealed_dates() -> set[str]:
+    """Dates already stored from the graded lot report.
+
+    The captcha-free daily feed has no grade, so rewriting those days would
+    duplicate every lot. Newer days are not sealed and can refresh in place.
+    """
+    with _lock:
+        return {
+            row["arrival_date"]
+            for row in _load_locked().values()
+            if str(row.get("grade") or "").strip()
+        }
+
+
 def latest_day() -> date | None:
     with _lock:
         days = [
@@ -245,6 +259,22 @@ def _save_locked(rows: dict[str, dict[str, Any]]) -> None:
         pass
 
 
+def _same_lot(previous: dict[str, Any], cleaned: dict[str, Any]) -> bool:
+    for field in (
+        "min_price",
+        "max_price",
+        "modal_price",
+        "arrival_qty",
+        "district",
+        "variety",
+        "grade",
+        "unit",
+    ):
+        if previous.get(field) != cleaned.get(field):
+            return False
+    return True
+
+
 def remember(rows: list[dict[str, Any]]) -> int:
     """Store freshly fetched official rows. Returns how many dates/lots were new."""
     if not rows:
@@ -253,16 +283,20 @@ def remember(rows: list[dict[str, Any]]) -> int:
         global _rows
         current = dict(_load_locked())
         added = 0
+        updated = 0
         for row in rows:
             signature = row_key(row)
             cleaned = _clean(row) if signature else None
             if not signature or cleaned is None:
                 continue
-            if signature not in current:
+            previous = current.get(signature)
+            if previous is None:
                 added += 1
+            elif not _same_lot(previous, cleaned):
+                updated += 1
             current[signature] = cleaned
         _rows = _prune_locked(current)
-        if added:
+        if added or updated:
             _save_locked(_rows)
             # Keep the bundled seed in sync on writable hosts so cold starts
             # (and the next deploy) do not fall back to an older snapshot.

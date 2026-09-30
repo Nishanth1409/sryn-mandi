@@ -66,6 +66,8 @@ export default function App() {
   const [activePlace, setActivePlace] = useState<DevicePlace | null>(null)
   const scopeRef = useRef(scope)
   const hasDataRef = useRef(false)
+  // Stay on the newest official day unless the visitor picks an older date.
+  const followLatestRef = useRef(true)
   scopeRef.current = scope
   const { status: geoStatus, place, message: geoMessage, locate } = useDevicePlace()
 
@@ -124,7 +126,7 @@ export default function App() {
     }
 
     void boot()
-    // Soft refresh (use cache) — hard refresh only via Sync Markets button
+    // Poll often enough to pick up the next official day without a manual sync.
     const id = window.setInterval(() => void load(false), REFRESH_MS)
     return () => {
       cancelled = true
@@ -161,12 +163,23 @@ export default function App() {
       setSelectedDate(null)
       return
     }
-    setSelectedDate((current) =>
-      current && availableDates.includes(current)
-        ? current
-        : data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records),
-    )
+    const latest =
+      data.board_date || data.summary.latest_date || pickLiveBoardDate(data.records)
+    setSelectedDate((current) => {
+      if (!followLatestRef.current && current && availableDates.includes(current)) return current
+      return latest && availableDates.includes(latest) ? latest : pickLiveBoardDate(data.records)
+    })
   }, [availableDates, data])
+
+  const selectBoardDate = useCallback(
+    (next: string) => {
+      const latest =
+        data?.board_date || data?.summary.latest_date || pickLiveBoardDate(data?.records ?? [])
+      followLatestRef.current = Boolean(latest) && next === latest
+      setSelectedDate(next)
+    },
+    [data],
+  )
 
   const boardDate = selectedDate
 
@@ -223,7 +236,7 @@ export default function App() {
             <AvailableDateCalendar
               availableDates={availableDates}
               selectedDate={boardDate}
-              onSelect={setSelectedDate}
+              onSelect={selectBoardDate}
               archivedNotice={
                 data.feed_health?.archive_stale
                   ? t('staleRatesNotice', {
@@ -244,6 +257,7 @@ export default function App() {
             )}
             availableDateCount={Math.max(availableDates?.length ?? 0, archiveDateCount)}
             onUnlocked={(prices) => {
+              followLatestRef.current = true
               setData(prices)
               setSelectedDate(null)
               setError(null)
@@ -287,7 +301,7 @@ export default function App() {
                 onRetryLocate={locate}
                 boardDate={boardDate}
                 availableDates={availableDates || []}
-                onSelectDate={setSelectedDate}
+                onSelectDate={selectBoardDate}
                 onActivePlaceChange={setActivePlace}
               />
               <RatesPanel
@@ -299,7 +313,7 @@ export default function App() {
                 updatedAt={data.updated_at}
                 boardDate={boardDate}
                 availableDates={availableDates || []}
-                onSelectDate={setSelectedDate}
+                onSelectDate={selectBoardDate}
               />
               <TrendsPanel
                 allRecords={data.records}

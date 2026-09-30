@@ -57,24 +57,29 @@ export function arrivalSortKey(arrivalDate: string): number {
   return 0
 }
 
-/** Prefer today, else the newest arrival day present in the set. */
+/** Newest official day that is not after the viewer's today. */
 export function pickLiveBoardDate(records: { arrival_date: string }[]): string | null {
   if (!records.length) return null
-  const today = formatBoardDate()
-  if (records.some((r) => r.arrival_date === today || isBoardDateToday(r.arrival_date))) {
-    return today
-  }
+  const todayKey = arrivalSortKey(formatBoardDate())
   let best: string | null = null
   let bestKey = -1
-  for (const r of records) {
-    if (!r.arrival_date) continue
-    const key = arrivalSortKey(r.arrival_date)
+  let newest: string | null = null
+  let newestKey = -1
+  for (const record of records) {
+    if (!record.arrival_date) continue
+    const key = arrivalSortKey(record.arrival_date)
+    if (key <= 0) continue
+    if (key > newestKey) {
+      newestKey = key
+      newest = record.arrival_date
+    }
+    if (todayKey && key > todayKey) continue
     if (key > bestKey) {
       bestKey = key
-      best = r.arrival_date
+      best = record.arrival_date
     }
   }
-  return best
+  return best ?? newest
 }
 
 export function filterToBoardDate<T extends { arrival_date: string }>(

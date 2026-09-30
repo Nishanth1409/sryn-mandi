@@ -21,7 +21,9 @@ from pydantic import BaseModel, Field
 
 from backend import agmarknet_access, archive
 from backend.dates import format_date as _format_date
+from backend.dates import india_today as _india_today
 from backend.dates import parse_date as _parse_date
+from backend import live_feed
 
 # data.gov.in never answers requests that look like a bare script client: it
 # accepts the connection and then holds it open until the read times out.
@@ -78,8 +80,12 @@ AGMARKNET_BLOCK_SECONDS = 6 * 3600
 HEAL_INTERVAL_HEALTHY_SECONDS = 900
 HEAL_INTERVAL_FIRST_RETRY_SECONDS = 60
 HEAL_INTERVAL_MAX_SECONDS = 900
+# Pull the captcha-free daily report on this cadence. Mandis publish today's
+# rate while yesterday is still inside the old "fresh archive" window.
+LIVE_REFRESH_SECONDS = 300
 
 _health_lock = threading.Lock()
+_live_pull = {"ok_at": 0.0, "try_at": 0.0, "failures": 0}
 _health: dict[str, Any] = {
     "last_success_at": 0.0,
     "last_attempt_at": 0.0,
@@ -108,6 +114,29 @@ def _record_fetch(rows: int, error: str | None = None) -> None:
             _health["last_error"] = error or "no rows returned by official sources"
 
 
+def _live_refresh_due() -> bool:
+    now = time.time()
+    with _health_lock:
+        ok_at = float(_live_pull["ok_at"])
+        try_at = float(_live_pull["try_at"])
+        failures = int(_live_pull["failures"])
+    if failures > 0:
+        backoff = min(HEAL_INTERVAL_FIRST_RETRY_SECONDS * (2 ** (failures - 1)), HEAL_INTERVAL_MAX_SECONDS)
+        return now - try_at >= backoff
+    return now - ok_at >= LIVE_REFRESH_SECONDS
+
+
+def _note_live_pull(*, ok: bool) -> None:
+    now = time.time()
+    with _health_lock:
+        _live_pull["try_at"] = now
+        if ok:
+            _live_pull["ok_at"] = now
+            _live_pull["failures"] = 0
+        else:
+            _live_pull["failures"] = int(_live_pull["failures"]) + 1
+
+
 def _heal_delay_seconds() -> float:
     with _health_lock:
         failures = int(_health["consecutive_failures"])
@@ -127,7 +156,11 @@ def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
         }
     archive_stats = archive.stats()
     stale = bool(archive_stats.get("stale"))
-    if fresh_rows > 0 and not stale:
+    # A current archive was filled from the official daily report. Only call it
+    # archived when that report has actually fallen behind.
+    if served_rows > 0 and not stale:
+        state = "live"
+    elif fresh_rows > 0 and served_rows > 0:
         state = "live"
     elif served_rows > 0:
         state = "archived"
@@ -575,8 +608,9 @@ def _pick_live_day(records: list[PriceRecord]) -> date | None:
     arrival_days = [d for d in arrival_days if d]
     if not arrival_days:
         return None
-    today = date.today()
-    return today if today in arrival_days else max(arrival_days)
+    today = _india_today()
+    published = [day for day in arrival_days if day <= today]
+    return max(published or arrival_days)
 
 
 def _filter_live_day(records: list[PriceRecord], live_day: date | None) -> list[PriceRecord]:
@@ -714,6 +748,20 @@ def _summary(records: list[PriceRecord]) -> SummaryStats:
     )
 
 
+def _cache_is_fresh(fetched_at: float, now: float) -> bool:
+    return now - fetched_at < CACHE_TTL_SECONDS and not _live_refresh_due()
+
+
+async def _ingest_live_prices(states: list[str]) -> int:
+    """Archive today's official lots. Returns how many lots were fetched."""
+    rows = await live_feed.fetch_rows(states)
+    if rows:
+        archive.remember(rows)
+        _record_source("agmarknet", True)
+        _record_fetch(len(rows))
+    return len(rows)
+
+
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
     now = time.time()
     cache_key = f"dated1|{days}|{','.join(sorted(states))}"
@@ -726,7 +774,7 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
             and mem.get("key") == cache_key
             and getattr(mem["data"], "summary", None)
             and mem["data"].summary.records > 0
-            and now - float(mem["fetched_at"]) < CACHE_TTL_SECONDS
+            and _cache_is_fresh(float(mem["fetched_at"]), now)
         ):
             return _cached_response(mem["data"], float(mem["fetched_at"]), now)
 
@@ -735,7 +783,7 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
         disk_data is not None
         and disk_data.summary.records > 0
         and not force
-        and now - disk_at < CACHE_TTL_SECONDS
+        and _cache_is_fresh(disk_at, now)
     ):
         with _cache_lock:
             _cache["data"] = disk_data
@@ -743,29 +791,28 @@ async def _load_prices(days: int, states: list[str], force: bool = False) -> Pri
             _cache["key"] = cache_key
         return _cached_response(disk_data, disk_at, now)
 
-    # Fast path: serve the saved official archive immediately instead of waiting
-    # on AGMARKNET (captcha) or a 40s upstream fetch on every visit.
-    # When the archive is stale, still return it quickly (so the UI stays usable)
-    # and try a short data.gov.in pull for any newer official lots.
-    if not force:
-        archived = _build_prices_from_archive(days, states)
-        if archived is not None and archived.summary.records > 0:
-            if archive.is_stale():
-                try:
-                    quick = await asyncio.wait_for(_fetch_datagovin(), timeout=8.0)
-                    if quick:
-                        archive.remember(quick)
-                        refreshed = _build_prices_from_archive(days, states)
-                        if refreshed is not None and refreshed.summary.records > 0:
-                            archived = refreshed
-                except Exception:
-                    _record_source("data.gov.in", False, "timeout")
-            with _cache_lock:
-                _cache["data"] = archived
-                _cache["fetched_at"] = now
-                _cache["key"] = cache_key
-            _write_disk_cache(cache_key, archived, now)
-            return archived
+    # The date-wise AGMARKNET report is the automatic source. data.gov.in is
+    # refused from this network, and the long report needs a captcha.
+    if force or _live_refresh_due():
+        try:
+            fetched = await asyncio.wait_for(_ingest_live_prices(states), timeout=28.0)
+            _note_live_pull(ok=fetched > 0 or not archive.is_stale())
+            if fetched <= 0 and archive.is_stale():
+                _record_source("agmarknet", False, "no new rows")
+        except Exception as exc:
+            _note_live_pull(ok=False)
+            _record_source("agmarknet", False, type(exc).__name__)
+            _record_fetch(0, type(exc).__name__)
+
+    # Serve the archive, including lots just saved above.
+    archived = _build_prices_from_archive(days, states)
+    if archived is not None and archived.summary.records > 0:
+        with _cache_lock:
+            _cache["data"] = archived
+            _cache["fetched_at"] = now
+            _cache["key"] = cache_key
+        _write_disk_cache(cache_key, archived, now)
+        return archived
 
     try:
         response = await _fetch_prices_fresh(days, states, force=force)
