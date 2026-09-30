@@ -80,6 +80,10 @@ const en = {
   chartHelp:
     'The green line is the average official rate on each day. The dotted lines are the highest and lowest rate posted that day. A rising line means the rate is going up.',
   chartUnitNote: 'All rates are ₹ per quintal (100 kg)',
+  lotAgeNew: 'New lot',
+  lotAgeOld: 'Old lot',
+  lotAgeNewKannada: 'ಹೊಸ ಲಾಟ್',
+  lotAgeOldKannada: 'ಹಳೆ ಲಾಟ್',
   chartSelectedDay: 'Date you picked',
   chartDaysShown: '{n} {n?day|days} with official rates',
   chartLotOnDay: '{n} official lot that day',
@@ -196,6 +200,10 @@ const kn: Record<MessageKey, string> = {
   chartHelp:
     'ಹಸಿರು ಗೆರೆ ಪ್ರತಿ ದಿನದ ಅಧಿಕೃತ ಸರಾಸರಿ ದರ. ಚುಕ್ಕೆ ಗೆರೆಗಳು ಆ ದಿನದ ಗರಿಷ್ಠ ಮತ್ತು ಕನಿಷ್ಠ ದರ. ಗೆರೆ ಮೇಲೇರಿದರೆ ದರ ಏರುತ್ತಿದೆ ಎಂದರ್ಥ.',
   chartUnitNote: 'ಎಲ್ಲಾ ದರಗಳು ₹ ಪ್ರತಿ ಕ್ವಿಂಟಲ್‌ಗೆ (100 ಕೆ.ಜಿ)',
+  lotAgeNew: 'ಹೊಸ ಲಾಟ್',
+  lotAgeOld: 'ಹಳೆ ಲಾಟ್',
+  lotAgeNewKannada: 'ಹೊಸ ಲಾಟ್',
+  lotAgeOldKannada: 'ಹಳೆ ಲಾಟ್',
   chartSelectedDay: 'ನೀವು ಆಯ್ಕೆ ಮಾಡಿದ ದಿನಾಂಕ',
   chartDaysShown: 'ಅಧಿಕೃತ ದರವಿರುವ {n} {n?ದಿನ|ದಿನಗಳು}',
   chartLotOnDay: 'ಆ ದಿನ {n} ಅಧಿಕೃತ ಲಾಟ್',
@@ -272,6 +280,10 @@ const hi: Record<MessageKey, string> = {
   chartHelp:
     'हरी रेखा हर दिन की आधिकारिक औसत दर है। बिंदीदार रेखाएँ उस दिन की अधिकतम और न्यूनतम दर हैं। रेखा ऊपर जाए तो दर बढ़ रही है.',
   chartUnitNote: 'सभी दरें ₹ प्रति क्विंटल (100 किलो)',
+  lotAgeNew: 'नया लॉट',
+  lotAgeOld: 'पुराना लॉट',
+  lotAgeNewKannada: 'ಹೊಸ ಲಾಟ್',
+  lotAgeOldKannada: 'ಹಳೆ ಲಾಟ್',
   chartSelectedDay: 'आपकी चुनी तारीख',
   chartDaysShown: 'आधिकारिक दर वाले {n} दिन',
   chartLotOnDay: 'उस दिन {n} आधिकारिक लॉट',

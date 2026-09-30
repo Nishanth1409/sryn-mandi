@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ARECA_MANDIS,
   VARIETY_BUCKETS,
+  lotAge,
   matchesVarietyBucket,
+  type LotAge,
   type MandiPoint,
   type VarietyBucketKey,
 } from '../geo/mandis'
@@ -57,32 +59,37 @@ function VarietyTable({
   kannada,
   rows,
   rateDate,
+  tone,
 }: {
   title: string
   kannada: string
   rows: PriceRecord[]
   rateDate: string | null
+  tone?: 'new' | 'old'
 }) {
   const { t } = usePrefs()
   const modalAvg = avg(rows.map((record) => record.modal_price).filter((price) => price > 0))
 
   return (
-    <article className="variety-card glass">
+    <article className={`variety-card glass${tone ? ` variety-card--${tone}` : ''}`}>
       <header className="variety-card__head">
         <div>
           <h3>
-            {title} <span>{kannada}</span>
+            {title}
+            {kannada && kannada !== title ? <span>{kannada}</span> : null}
           </h3>
-          <p>
-            {rows.length
-              ? t(rows.length > 1 ? 'avgModalLotsPlural' : 'avgModalLots', {
+          {rows.length ? (
+            <>
+              <p>
+                {t(rows.length > 1 ? 'avgModalLotsPlural' : 'avgModalLots', {
                   price: formatINR(modalAvg ?? 0),
                   n: rows.length,
-                })
-              : t('noRatesOnDate')}
-          </p>
-          {rateDate && rows.length ? (
-            <p className="variety-card__stale is-live">{t('ratesAsOf', { date: rateDate })}</p>
+                })}
+              </p>
+              {rateDate ? (
+                <p className="variety-card__stale is-live">{t('ratesAsOf', { date: rateDate })}</p>
+              ) : null}
+            </>
           ) : null}
         </div>
       </header>
@@ -208,7 +215,20 @@ export function LocalPlacePanel({
       })),
     [exactPlaceRows],
   )
-  const displayedLots = varietyGroups.flatMap((group) => group.rows)
+  const lotAgeGroups = useMemo(
+    () =>
+      (['new', 'old'] as LotAge[])
+        .map((age) => ({
+          key: age,
+          title: t(age === 'new' ? 'lotAgeNew' : 'lotAgeOld'),
+          kannada: t(age === 'new' ? 'lotAgeNewKannada' : 'lotAgeOldKannada'),
+          rows: exactPlaceRows
+            .filter((record) => lotAge(record.variety) === age && record.modal_price > 0)
+            .sort((a, b) => b.modal_price - a.modal_price),
+        })),
+    [exactPlaceRows, t],
+  )
+  const displayedLots = [...varietyGroups, ...lotAgeGroups].flatMap((group) => group.rows)
   const placeAvg = avg(displayedLots.map((record) => record.modal_price).filter((price) => price > 0))
 
   return (
@@ -303,6 +323,9 @@ export function LocalPlacePanel({
         <div className="variety-grid">
           {varietyGroups.map((group) => (
             <VarietyTable key={group.key} title={group.title} kannada={group.kannada} rows={group.rows} rateDate={boardDate || null} />
+          ))}
+          {lotAgeGroups.map((group) => (
+            <VarietyTable key={group.key} title={group.title} kannada={group.kannada} rows={group.rows} rateDate={boardDate || null} tone={group.key} />
           ))}
         </div>
       ) : null}

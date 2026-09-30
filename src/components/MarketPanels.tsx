@@ -24,6 +24,7 @@ import { useMemo, useState } from 'react'
 import {
   ARECA_MANDIS,
   VARIETY_BUCKETS,
+  lotAge,
   matchesVarietyBucket,
   type MandiPoint,
   type VarietyBucketKey,
@@ -317,6 +318,63 @@ function ChartTip({
   )
 }
 
+function latestDayLeaders(records: PriceRecord[], matches: (variety: string) => boolean): TopMarket[] {
+  const varietyRows = records.filter((record) => matches(record.variety) && record.modal_price > 0)
+  if (!varietyRows.length) return []
+  const latestDay = varietyRows.reduce(
+    (best, row) => (arrivalSortKey(row.arrival_date) > arrivalSortKey(best) ? row.arrival_date : best),
+    varietyRows[0].arrival_date,
+  )
+  return varietyRows
+    .filter((row) => row.arrival_date === latestDay)
+    .sort((a, b) => b.modal_price - a.modal_price)
+    .slice(0, 8)
+    .map((record) => ({
+      market: record.market,
+      district: record.district,
+      state: record.state,
+      variety: record.variety,
+      modal_price: record.modal_price,
+      change_pct: record.change_pct,
+      is_shivamogga: record.is_shivamogga,
+      arrival_date: record.arrival_date,
+    }))
+}
+
+function TopMarketList({ title, rows }: { title: string; rows: TopMarket[] }) {
+  const { t } = usePrefs()
+  return (
+    <div className="trend-side-block">
+      <h3 className="trend-side-title">{title}</h3>
+      <ol className="top-list">
+        {rows.length === 0 ? (
+          <li className="empty-inline">{t('noRatesOnDate')}</li>
+        ) : (
+          rows.map((market, index) => (
+            <li key={`${market.market}-${market.variety}-${index}`}>
+              <span className="rank">{index + 1}</span>
+              <div className="market">
+                <strong>
+                  {market.market}
+                  {market.is_shivamogga ? <span className="tag">{t('shivamogga')}</span> : null}
+                </strong>
+                <small>
+                  {market.district} · {market.variety}
+                  {market.arrival_date ? ` · ${market.arrival_date}` : ''}
+                </small>
+              </div>
+              <div className="top-list__price">
+                <div className="num">{formatINR(market.modal_price)}</div>
+                <TrendDelta change={market.change_pct} changePct={market.change_pct} />
+              </div>
+            </li>
+          ))
+        )}
+      </ol>
+    </div>
+  )
+}
+
 export function TrendsPanel({
   allRecords,
   boardRecords,
@@ -380,6 +438,8 @@ export function TrendsPanel({
       )
       map[bucket.key] = buildHistory(rows)
     }
+    map['new-lot'] = buildHistory(placeRecords.filter((record) => lotAge(record.variety) === 'new'))
+    map['old-lot'] = buildHistory(placeRecords.filter((record) => lotAge(record.variety) === 'old'))
     return map
   }, [placeRecords])
 
@@ -404,14 +464,16 @@ export function TrendsPanel({
       }))
   }, [boardPlaceRecords])
 
-  const defaultVariety = useMemo((): VarietyBucketKey | 'all' => {
+  const defaultVariety = useMemo((): VarietyBucketKey | 'new-lot' | 'old-lot' | 'all' => {
     for (const bucket of VARIETY_BUCKETS) {
       if ((historyByVariety[bucket.key] || []).length > 0) return bucket.key
     }
+    if ((historyByVariety['new-lot'] || []).length > 0) return 'new-lot'
+    if ((historyByVariety['old-lot'] || []).length > 0) return 'old-lot'
     return 'rashi'
   }, [historyByVariety])
 
-  const [varietyKey, setVarietyKey] = useState<VarietyBucketKey | 'all' | null>(null)
+  const [varietyKey, setVarietyKey] = useState<VarietyBucketKey | 'new-lot' | 'old-lot' | 'all' | null>(null)
   const activeVariety = varietyKey ?? defaultVariety
 
   const selectedBucket =
@@ -472,15 +534,18 @@ export function TrendsPanel({
       : null
 
   const leaders = useMemo(() => {
-    if (activeVariety === 'all' || !selectedBucket) return topMarkets
-    const fromTop = topMarkets.filter((m) =>
-      matchesVarietyBucket(m.variety, selectedBucket.match),
-    )
+    const matchesActive = (variety: string) => {
+      if (activeVariety === 'new-lot') return lotAge(variety) === 'new'
+      if (activeVariety === 'old-lot') return lotAge(variety) === 'old'
+      if (!selectedBucket) return true
+      return matchesVarietyBucket(variety, selectedBucket.match)
+    }
+    if (activeVariety === 'all') return topMarkets
+    const fromTop = topMarkets.filter((m) => matchesActive(m.variety))
     if (fromTop.length) return fromTop.slice(0, 8)
 
     const varietyRows = placeRecords.filter(
-      (record) =>
-        matchesVarietyBucket(record.variety, selectedBucket.match) && record.modal_price > 0,
+      (record) => matchesActive(record.variety) && record.modal_price > 0,
     )
     if (!varietyRows.length) return []
     // Nothing for this grade on the chosen date — fall back to its own latest
@@ -506,9 +571,26 @@ export function TrendsPanel({
       }))
   }, [activeVariety, selectedBucket, topMarkets, placeRecords])
 
-  const varietyLabel = selectedBucket
-    ? `${selectedBucket.title} (${selectedBucket.kannada})`
-    : t('chartAllGrades')
+  const newLotLeaders = useMemo(
+    () => latestDayLeaders(placeRecords, (variety) => lotAge(variety) === 'new'),
+    [placeRecords],
+  )
+  const oldLotLeaders = useMemo(
+    () => latestDayLeaders(placeRecords, (variety) => lotAge(variety) === 'old'),
+    [placeRecords],
+  )
+  const showingLotAge = activeVariety === 'new-lot' || activeVariety === 'old-lot'
+
+  const withKannada = (title: string, kannada: string) =>
+    kannada && kannada !== title ? `${title} (${kannada})` : title
+  const varietyLabel =
+    activeVariety === 'new-lot'
+      ? withKannada(t('lotAgeNew'), t('lotAgeNewKannada'))
+      : activeVariety === 'old-lot'
+        ? withKannada(t('lotAgeOld'), t('lotAgeOldKannada'))
+        : selectedBucket
+          ? withKannada(selectedBucket.title, selectedBucket.kannada)
+          : t('chartAllGrades')
 
   return (
     <section className="shell glass" id="trends">
@@ -603,7 +685,15 @@ export function TrendsPanel({
               >
                 {t('chartAllGrades')}
               </button>
-              {VARIETY_BUCKETS.map((b) => {
+              {[
+                ...VARIETY_BUCKETS.map((bucket) => ({
+                  key: bucket.key,
+                  title: bucket.title,
+                  kannada: bucket.kannada,
+                })),
+                { key: 'new-lot' as const, title: t('lotAgeNew'), kannada: t('lotAgeNewKannada') },
+                { key: 'old-lot' as const, title: t('lotAgeOld'), kannada: t('lotAgeOldKannada') },
+              ].map((b) => {
                 const n = (historyByVariety[b.key] || []).length
                 return (
                   <button
@@ -614,7 +704,7 @@ export function TrendsPanel({
                     disabled={n === 0}
                   >
                     {b.title}
-                    <em>{b.kannada}</em>
+                    {b.kannada !== b.title ? <em>{b.kannada}</em> : null}
                     {n > 0 ? <em>{t('daysCount', { n })}</em> : null}
                   </button>
                 )
@@ -780,36 +870,17 @@ export function TrendsPanel({
               ) : null}
             </div>
             <div>
-              <h3 className="trend-side-title">
-                {selectedBucket
-                  ? t('topForVariety', { variety: selectedBucket.title })
-                  : t('topAllMarkets')}
-              </h3>
-              <ol className="top-list">
-                {leaders.length === 0 ? (
-                  <li className="empty-inline">{t('noRatesOnDate')}</li>
-                ) : (
-                  leaders.map((m, i) => (
-                    <li key={`${m.market}-${m.variety}-${i}`}>
-                      <span className="rank">{i + 1}</span>
-                      <div className="market">
-                        <strong>
-                          {m.market}
-                          {m.is_shivamogga ? <span className="tag">{t('shivamogga')}</span> : null}
-                        </strong>
-                        <small>
-                          {m.district} · {m.variety}
-                          {m.arrival_date ? ` · ${m.arrival_date}` : ''}
-                        </small>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div className="num">{formatINR(m.modal_price)}</div>
-                        <TrendDelta change={m.change_pct} changePct={m.change_pct} />
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ol>
+              {showingLotAge ? (
+                <>
+                  <TopMarketList title={t('topForVariety', { variety: t('lotAgeNew') })} rows={newLotLeaders} />
+                  <TopMarketList title={t('topForVariety', { variety: t('lotAgeOld') })} rows={oldLotLeaders} />
+                </>
+              ) : (
+                <TopMarketList
+                  title={selectedBucket ? t('topForVariety', { variety: selectedBucket.title }) : t('topAllMarkets')}
+                  rows={leaders}
+                />
+              )}
             </div>
           </div>
         </>

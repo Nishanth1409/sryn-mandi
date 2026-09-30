@@ -1992,6 +1992,14 @@ html[data-theme='light'] .rates--scroll .sticky-col {
   overflow: hidden;
 }
 
+.variety-card--new {
+  border-top: 3px solid var(--leaf-glow);
+}
+
+.variety-card--old {
+  border-top: 3px solid var(--nut);
+}
+
 #rates {
   overflow: visible;
 }
@@ -2231,6 +2239,10 @@ table.rates tr.featured td {
   line-height: 1.25;
 }
 
+.trend-side-block + .trend-side-block {
+  margin-top: 1.15rem;
+}
+
 .trend-side-title {
   margin: 0 0 0.45rem;
   font-size: 0.82rem;
@@ -2293,6 +2305,10 @@ table.rates tr.featured td {
 
 .top-list li:last-child {
   border-bottom: 0;
+}
+
+.top-list__price {
+  text-align: right;
 }
 
 .rank {

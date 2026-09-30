@@ -310,3 +310,18 @@ export function matchesVarietyBucket(variety: string, match: readonly string[]):
   const v = variety.toLowerCase().trim()
   return match.some((m) => v === m || v.includes(m))
 }
+
+/** Official names for a fresh lot versus a carried-over lot. These are never the same rate. */
+const NEW_LOT_NAMES = ['new variety', 'hosa chali']
+const OLD_LOT_NAMES = ['old variety', 'hale chali']
+
+export type LotAge = 'new' | 'old'
+
+export function lotAge(variety: string): LotAge | null {
+  const name = variety.toLowerCase().trim()
+  if (NEW_LOT_NAMES.some((label) => name === label || name.startsWith(`${label} `))) return 'new'
+  if (OLD_LOT_NAMES.some((label) => name === label || name.startsWith(`${label} `))) return 'old'
+  if (/^hosa\b/.test(name)) return 'new'
+  if (/^hale\b/.test(name)) return 'old'
+  return null
+}
