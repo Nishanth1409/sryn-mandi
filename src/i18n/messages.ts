@@ -16,7 +16,7 @@ const en = {
   archivedRatesNotice:
     'Official sources are unreachable. Showing the exact rates already saved from them, and retrying in the background.',
   staleRatesNotice:
-    'Saved rates stop at {date}. AGMARKNET needs a one-time captcha to load newer official dates.',
+    'Last saved official date is {date}. Newer mandi rates are loading automatically in the background.',
   heroKicker: 'Official AGMARKNET · exact dated rates',
   heroTitle1: 'The mandi,',
   heroTitle2: 'by date.',
@@ -166,7 +166,7 @@ const kn: Record<MessageKey, string> = {
   archivedRatesNotice:
     'ಅಧಿಕೃತ ಮೂಲಗಳು ಸಿಗುತ್ತಿಲ್ಲ. ಅವುಗಳಿಂದ ಈಗಾಗಲೇ ಉಳಿಸಿದ ನಿಖರ ದರಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ, ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಮರುಪ್ರಯತ್ನ ನಡೆಯುತ್ತಿದೆ.',
   staleRatesNotice:
-    'ಉಳಿಸಿದ ದರಗಳು {date} ರಲ್ಲಿ ನಿಲ್ಲುತ್ತವೆ. ಹೊಸ ಅಧಿಕೃತ ದಿನಾಂಕಗಳಿಗೆ AGMARKNET ಕ್ಯಾಪ್ಚಾ ಒಮ್ಮೆ ಬೇಕು.',
+    'ಕೊನೆಯ ಉಳಿಸಿದ ಅಧಿಕೃತ ದಿನಾಂಕ {date}. ಹೊಸ ಮಂಡಿ ದರಗಳು ಹಿನ್ನೆಲೆಯಲ್ಲಿ ತಾನಾಗಿಯೇ ಲೋಡ್ ಆಗುತ್ತಿವೆ.',
   heroKicker: 'ಅಧಿಕೃತ AGMARKNET · ನಿಖರ ದಿನಾಂಕದ ದರಗಳು', heroTitle1: 'ಮಂಡಿ,', heroTitle2: 'ದಿನಾಂಕದಂತೆ.',
   heroBody: 'ಲಭ್ಯವಿರುವ ಪ್ರತಿಯೊಂದು ದಿನಾಂಕದ ನಿಖರ ಅಧಿಕೃತ ಅಡಿಕೆ ಮಾರುಕಟ್ಟೆ ಲಾಟ್‌ಗಳನ್ನು ನೋಡಿ. ಇಲ್ಲದ ದಿನಾಂಕ ಅಥವಾ ದರ ಸೇರಿಸಲಾಗುವುದಿಲ್ಲ.',
   myPlaceRates: 'ನನ್ನ ಸ್ಥಳದ ದರಗಳು', syncMarkets: 'ಮಾರುಕಟ್ಟೆ ಸಿಂಕ್', syncing: 'ಸಿಂಕ್ ಆಗುತ್ತಿದೆ…',
@@ -246,7 +246,7 @@ const hi: Record<MessageKey, string> = {
   archivedRatesNotice:
     'आधिकारिक स्रोत उपलब्ध नहीं हैं। उनसे पहले सहेजी गई सटीक दरें दिखाई जा रही हैं, और पृष्ठभूमि में पुनः प्रयास जारी है।',
   staleRatesNotice:
-    'सहेजी दरें {date} पर रुकती हैं। नई आधिकारिक तारीखों के लिए AGMARKNET कैप्चा एक बार चाहिए।',
+    'आखिरी सहेजी आधिकारिक तारीख {date} है। नई मंडी दरें पृष्ठभूमि में अपने आप लोड हो रही हैं।',
   heroKicker: 'आधिकारिक AGMARKNET · सही तारीख की दरें', heroTitle1: 'मंडी,', heroTitle2: 'तारीख के अनुसार.',
   heroBody: 'हर उपलब्ध तारीख के सही आधिकारिक सुपारी बाज़ार लॉट देखें। ग़ायब तारीख या कीमत कभी नहीं भरी जाती।',
   myPlaceRates: 'मेरे स्थान की दरें', syncMarkets: 'बाज़ार सिंक', syncing: 'सिंक हो रहा है…',

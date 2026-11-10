@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from backend.dates import format_date, parse_date
+from backend.dates import format_date, india_today, parse_date
 
 ARCHIVE_PATH = Path(
     os.environ.get("MARKET_ARCHIVE_PATH")
@@ -178,7 +178,7 @@ def days_behind(today: date | None = None) -> int | None:
     newest = latest_day()
     if newest is None:
         return None
-    return max(0, ((today or date.today()) - newest).days)
+    return max(0, ((today or india_today()) - newest).days)
 
 
 def is_stale(max_lag_days: int = MAX_FRESH_LAG_DAYS, today: date | None = None) -> bool:
@@ -217,7 +217,7 @@ def stats_from_rows(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     newest = parse_date(ordered[-1]) if ordered else None
     lag = None
     if newest is not None:
-        lag = max(0, (date.today() - newest).days)
+        lag = max(0, (india_today() - newest).days)
     return {
         "rows": len(rows),
         "dates": len(ordered),
@@ -229,7 +229,7 @@ def stats_from_rows(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 def _prune_locked(rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    cutoff = date.today() - timedelta(days=MAX_AGE_DAYS)
+    cutoff = india_today() - timedelta(days=MAX_AGE_DAYS)
     kept = {
         signature: row
         for signature, row in rows.items()

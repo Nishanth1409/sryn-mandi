@@ -17,14 +17,16 @@ Nothing here invents prices or dates — every row comes from api.agmarknet.gov.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-from backend.dates import format_date, parse_date
+from backend.dates import format_date, india_today, parse_date
 
 AGMARKNET_BASE = "https://api.agmarknet.gov.in/v1"
 PORTAL_URL = "https://agmarknet.gov.in"
@@ -47,6 +49,15 @@ REQUEST_HEADERS = {
 
 _lock = threading.Lock()
 _ticket: dict[str, Any] | None = None
+
+TICKET_PATH = Path(
+    os.environ.get("AGMARKNET_TICKET_PATH")
+    or (
+        Path("/tmp/agmarknet_ticket.json")
+        if os.environ.get("VERCEL")
+        else Path(__file__).resolve().parent / "data" / "agmarknet_ticket.json"
+    )
+)
 
 
 def _parse_expiry(value: str | None) -> float:
@@ -152,6 +163,65 @@ def _normalize_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def _save_ticket_locked() -> None:
+    with _lock:
+        current = dict(_ticket) if _ticket else None
+    if not current:
+        return
+    try:
+        TICKET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temp = TICKET_PATH.with_suffix(".tmp")
+        temp.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+        temp.replace(TICKET_PATH)
+    except OSError:
+        pass
+
+
+def _load_ticket_from_disk() -> None:
+    global _ticket
+    try:
+        if not TICKET_PATH.exists():
+            return
+        payload = json.loads(TICKET_PATH.read_text(encoding="utf-8"))
+        if not payload.get("report_ticket"):
+            return
+        with _lock:
+            _ticket = payload
+    except (OSError, ValueError):
+        return
+
+
+def _apply_env_ticket() -> None:
+    """Optional server ticket so production can refresh without visitor captcha."""
+    token = (os.environ.get("AGMARKNET_REPORT_TICKET") or "").strip()
+    if not token:
+        return
+    global _ticket
+    expires = _parse_expiry(os.environ.get("AGMARKNET_TICKET_EXPIRES"))
+    if expires <= time.time():
+        return
+    with _lock:
+        _ticket = {
+            "report_ticket": token,
+            "expires_at": expires,
+            "expires_at_iso": os.environ.get("AGMARKNET_TICKET_EXPIRES"),
+            "remaining_calls": int(os.environ.get("AGMARKNET_TICKET_REMAINING") or 30),
+            "max_calls": int(os.environ.get("AGMARKNET_TICKET_MAX") or 30),
+            "from_date": os.environ.get("AGMARKNET_TICKET_FROM") or "",
+            "to_date": os.environ.get("AGMARKNET_TICKET_TO") or "",
+            "states": ["Karnataka"],
+            "saved_at": time.time(),
+        }
+
+
+def bootstrap_ticket() -> dict[str, Any]:
+    """Load ticket from env or disk before automatic refreshes."""
+    _apply_env_ticket()
+    if not ticket_status().get("active"):
+        _load_ticket_from_disk()
+    return ticket_status()
+
+
 def _remember_ticket(access: dict[str, Any], *, from_day: date, to_day: date, states: list[str]) -> None:
     global _ticket
     ticket = access.get("report_ticket")
@@ -169,6 +239,7 @@ def _remember_ticket(access: dict[str, Any], *, from_day: date, to_day: date, st
             "states": list(states),
             "saved_at": time.time(),
         }
+    _save_ticket_locked()
 
 
 def ticket_status() -> dict[str, Any]:
@@ -296,3 +367,65 @@ def unlock_history(
             "max_calls": access.get("max_calls"),
         },
     }
+
+
+def fetch_recent_with_ticket(
+    states: list[str],
+    lookback_days: int = 45,
+) -> list[dict[str, Any]]:
+    """Pull recent official lots using a saved report ticket (no visitor captcha)."""
+    bootstrap_ticket()
+    status = ticket_status()
+    if not status.get("active"):
+        return []
+
+    today = india_today()
+    year_start = date(today.year, 1, 1)
+    earliest = today - timedelta(days=max(1, lookback_days))
+    from_day = max(earliest, year_start)
+    to_day = today
+
+    resolved = _resolve_filters(states)
+    report_ticket = str(status.get("report_ticket") or "")
+    all_rows: list[dict[str, Any]] = []
+    access: dict[str, Any] = {}
+
+    with httpx.Client(timeout=90.0, headers=REQUEST_HEADERS) as client:
+        for page in range(1, MAX_PAGES + 1):
+            if not report_ticket:
+                break
+            if int(ticket_status().get("remaining_calls") or 0) <= 0:
+                break
+            body = _report_payload(
+                resolved=resolved,
+                from_day=from_day,
+                to_day=to_day,
+                page=page,
+            )
+            body["report_ticket"] = report_ticket
+
+            response = client.post(f"{AGMARKNET_BASE}/daily-price-arrival/report", json=body)
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise RuntimeError(f"AGMARKNET returned non-JSON ({response.status_code})") from exc
+
+            if response.status_code != 200:
+                detail = payload.get("detail") or payload.get("message") or response.text
+                code = payload.get("code") or "AGMARKNET_ERROR"
+                raise RuntimeError(f"{code}: {detail}")
+
+            access = payload.get("report_access") or access
+            _remember_ticket(access, from_day=from_day, to_day=to_day, states=states)
+            report_ticket = str(access.get("report_ticket") or report_ticket)
+
+            block = ((payload.get("data") or {}).get("records") or [{}])[0]
+            page_rows = block.get("data") or []
+            info = (block.get("pagination") or [{}])[0]
+            total_pages = int(info.get("total_pages") or 1)
+            all_rows.extend(_normalize_rows(page_rows))
+
+            if page >= total_pages or not page_rows:
+                break
+
+    return all_rows

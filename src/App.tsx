@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchPrices } from './api'
 import { ArakaScene } from './components/ArakaScene'
 import { AvailableDateCalendar } from './components/AvailableDateCalendar'
-import { HistoryUnlockPanel } from './components/HistoryUnlockPanel'
 import { LocalPlacePanel } from './components/LocalPlacePanel'
 import {
   HeroOverlay,
@@ -215,8 +214,6 @@ export default function App() {
     if (scope !== 'india' && explicitlyOpenedAllIndia) void load(false, 'india')
   }
 
-  const archiveDateCount = data?.feed_health?.archive?.dates ?? 0
-
   return (
     <>
       <ArakaScene />
@@ -248,22 +245,6 @@ export default function App() {
               }
             />
           ) : null}
-
-          <HistoryUnlockPanel
-            needed={Boolean(
-              data?.feed_health?.captcha_required ||
-                data?.feed_health?.archive_stale ||
-                data?.feed_health?.sources?.agmarknet === 'captcha_required',
-            )}
-            availableDateCount={Math.max(availableDates?.length ?? 0, archiveDateCount)}
-            onUnlocked={(prices) => {
-              followLatestRef.current = true
-              setData(prices)
-              setSelectedDate(null)
-              setError(null)
-              setHealAttempt(0)
-            }}
-          />
 
           {boardSummary ? (
             <StatsStrip

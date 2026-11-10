@@ -11,5 +11,11 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/prices?days=400&scope=karnataka&refresh=true",
+      "schedule": "0 */4 * * *"
+    }
   ]
 }

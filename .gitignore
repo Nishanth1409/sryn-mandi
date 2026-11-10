@@ -39,6 +39,8 @@ venv/
 backend/data/*.json
 !backend/data/.gitkeep
 !backend/data/market_archive.seed.json
+backend/data/agmarknet_ticket.json
+backend/data/_captcha*
 
 # Local mockup studio (used only to regenerate README device shots)
 public/mockup/

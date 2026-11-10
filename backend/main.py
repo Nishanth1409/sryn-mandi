@@ -23,7 +23,6 @@ from backend import agmarknet_access, archive
 from backend.dates import format_date as _format_date
 from backend.dates import india_today as _india_today
 from backend.dates import parse_date as _parse_date
-from backend import live_feed
 
 # data.gov.in never answers requests that look like a bare script client: it
 # accepts the connection and then holds it open until the read times out.
@@ -170,11 +169,8 @@ def _feed_health(fresh_rows: int, served_rows: int) -> dict[str, Any]:
     ticket = agmarknet_access.ticket_status()
     # Ask for captcha when history is missing OR the newest saved date is stale.
     # A large old archive must not hide the unlock panel forever.
-    captcha_required = (
-        stale
-        or not archive.is_adequate()
-        or agmarknet_status == "captcha_required"
-    ) and not ticket.get("active")
+    # Visitors never solve captcha; background jobs use a saved report ticket.
+    captcha_required = False
     return {
         **snapshot,
         "state": state,
@@ -753,13 +749,43 @@ def _cache_is_fresh(fetched_at: float, now: float) -> bool:
 
 
 async def _ingest_live_prices(states: list[str]) -> int:
-    """Archive today's official lots. Returns how many lots were fetched."""
-    rows = await live_feed.fetch_rows(states)
-    if rows:
-        archive.remember(rows)
-        _record_source("agmarknet", True)
-        _record_fetch(len(rows))
-    return len(rows)
+    """Archive newer official lots without asking visitors for captcha."""
+    loop = asyncio.get_running_loop()
+    fresh: list[dict] = []
+    agmarknet_access.bootstrap_ticket()
+    try:
+        ticket_rows = await loop.run_in_executor(
+            None,
+            lambda: agmarknet_access.fetch_recent_with_ticket(
+                states,
+                lookback_days=MAX_UPSTREAM_LOOKBACK_DAYS,
+            ),
+        )
+        if ticket_rows:
+            fresh.extend(ticket_rows)
+            _record_source("agmarknet", True)
+    except Exception as exc:
+        _record_source("agmarknet", False, type(exc).__name__)
+
+    if not fresh:
+        try:
+            datagov = await asyncio.wait_for(_fetch_datagovin(), timeout=12.0)
+            if datagov:
+                fresh.extend(datagov)
+                _record_source("data.gov.in", True)
+        except Exception as exc:
+            _record_source("data.gov.in", False, type(exc).__name__)
+
+    if fresh:
+        archive.remember(fresh)
+        _record_fetch(len(fresh))
+        return len(fresh)
+
+    if not archive.is_stale():
+        _note_live_pull(ok=True)
+        return 0
+    _record_fetch(0, "no new rows")
+    return 0
 
 
 async def _load_prices(days: int, states: list[str], force: bool = False) -> PricesResponse:
@@ -906,7 +932,7 @@ def _build_prices_response(
 def _build_prices_from_archive(days: int, states: list[str]) -> PricesResponse | None:
     if not archive.is_adequate():
         return None
-    cutoff = date.today() - timedelta(days=min(max(days, 7), MAX_SERVE_WINDOW_DAYS))
+    cutoff = _india_today() - timedelta(days=min(max(days, 7), MAX_SERVE_WINDOW_DAYS))
     raw = _filter_rows_by_states(archive.rows_since(cutoff), states)
     if not raw:
         return None
@@ -1057,10 +1083,7 @@ async def agmarknet_status():
     ticket = agmarknet_access.ticket_status()
     stale = archive.is_stale()
     return {
-        "captcha_required": (
-            (stale or not archive.is_adequate() or source == "captcha_required" or time.time() < blocked_until)
-            and not ticket.get("active")
-        ),
+        "captcha_required": False,
         "archive_stale": stale,
         "source": source,
         "ticket": ticket,
@@ -1223,6 +1246,7 @@ async def _self_heal_loop() -> None:
 async def warmup():
     """Warm the Karnataka board from the saved archive and start recovery."""
     archive.ensure_seeded()
+    agmarknet_access.bootstrap_ticket()
     try:
         await _load_prices(days=MAX_SERVE_WINDOW_DAYS, states=DEFAULT_STATES, force=False)
     except Exception:
