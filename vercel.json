@@ -15,7 +15,7 @@
   "crons": [
     {
       "path": "/api/prices?days=400&scope=karnataka&refresh=true",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
